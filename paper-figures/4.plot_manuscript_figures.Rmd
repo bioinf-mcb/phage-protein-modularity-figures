@@ -90,23 +90,24 @@ ggsave(p.figure, filename = sprintf("%sFigure1/Figure1.png", OUTPUT.FIGURES.PATH
 
 # Fig 2: heatmap of ECODS found in multiple categories
 ```{r}
-text_size = 8
+
+text_size.x = 7
+text_size.y = 8
+
 h.domain.occurence.data = data.table::fread(sprintf("%sFigure2/H_domains.txt", OUTPUT.FIGURES.PATH)) %>% 
   as.data.frame() 
-
 h.domain.occurence.data$category <- factor(h.domain.occurence.data$category, levels = phrogs.class.order)
 
 ggplot(h.domain.occurence.data) +
   geom_tile(aes(x=h_name, y = annotation, fill = category)) + 
-  Get.Theme(text_size = text_size) +
-  theme(axis.text.x = element_text(angle=45, hjust = 1,vjust=1, size = text_size),
-               axis.text.y = element_text(hjust = 1,vjust=0.5, size = text_size),
+  theme(axis.text.x = element_text(angle=45, hjust = 1,vjust=1, size = text_size.x),
+               axis.text.y = element_text(hjust = 1,vjust=0.5, size = text_size.y),
                strip.text.y = element_text(face = "bold", size = 6, angle = 360)) +
   facet_grid(category ~., scales = "free", space = "free", labeller = labeller(category = phrog.class.labels)) + xlab("") + ylab("") +
   guides(fill = "none") +
   scale_fill_manual(values = PHROG.COLOR.MAP)
 
-ggsave(sprintf("%sFigure2/H_domains.jpg", OUTPUT.FIGURES.PATH), width = 7.5, height = 9)
+ggsave(sprintf("%sFigure2/H_domains.jpg", OUTPUT.FIGURES.PATH), width = 9, height = 9)
 ```
 
 
@@ -125,7 +126,7 @@ text.size.panel = 12
   colm = colormap$color
   names(colm) = colormap$domain
         
-      for (this.annotation in most.mosaic.annotations) {
+      for (this.annotation in unique(tile.data$annotation)) {
         this.tile.data = tile.data %>% 
           filter(annotation == this.annotation)  %>% 
           mutate(annotation = this.annotation) %>%
@@ -163,8 +164,8 @@ text.size.panel = 12
   
   g.dummy = ggplot(tile.data, aes(x=qname, y = domain, fill = domain_name)) + geom_col() + 
     scale_fill_manual(values = colm.with.names, name = 'Domain topology') +
-    theme(legend.margin =margin(r=0,l=0,t=0,b=0)) +
-    guides(fill=guide_legend(ncol=4))
+    theme(legend.margin =margin(r=0,l=0,t=0,b=0), text = element_text(size = 7)) +
+    guides(fill=guide_legend(ncol=6))
   
   leg <- ggpubr::get_legend(g.dummy, position = "right")
   ggleg = ggpubr::as_ggplot(leg)
@@ -173,23 +174,35 @@ text.size.panel = 12
 
 
   
-    ncol = ceiling(length(domain.position.plots)/2)
+    ncol = ceiling(length(domain.position.plots)/4)
     jpeg(sprintf("%sFigure5/domain.positions.jpg", OUTPUT.FIGURES.PATH), 
          width = 50, 
          height = 30, units = "cm", res = 300)
     
     ggpubr::ggarrange(
       egg::ggarrange(plots = domain.position.plots,
-                     ncol = ncol, nrow = 2),
+                     ncol = ncol, nrow = 4),
       ggleg,
       nrow = 2,
-      heights = c(2,1))
+      heights = c(0.77,0.25))
       #legend.prob = ggleg,
       #nrow = 1,
       #legend = "bottom")
   dev.off()
   
-
+    pdf(sprintf("%sFigure5/domain.positions_top.pdf", OUTPUT.FIGURES.PATH), 
+         width = 10, 
+         height = 10)
+      egg::ggarrange(plots = domain.position.plots,
+                     ncol = ncol, nrow = 4)
+      dev.off()
+      
+      
+    pdf(sprintf("%sFigure5/domain.positions_bottom.pdf", OUTPUT.FIGURES.PATH), 
+         width = 20, 
+         height = 10)
+    ggleg
+      dev.off()
 ```
 
 # Fig. 4: diversity
@@ -206,22 +219,21 @@ Fig4a = ggplot(diversity, aes(x=prop.proteins.with.ecod.hit)) +
 
 # label the ones that have many families or fold types
 
-diversity.ok.ecod = diversity %>% filter(!poorly.ecod.annotated)
-
-diversity.ok.ecod$label <- ""
-is.diverse.enough.for.label <- 
-  diversity.ok.ecod$num.families >= plotting.thr.fam | 
-  diversity.ok.ecod$num.topology.combinations >= plotting.thr.ft
-diversity.ok.ecod$label[is.diverse.enough.for.label] <- diversity.ok.ecod$annotation[is.diverse.enough.for.label]
+diversity.ok.ecod = diversity %>% filter(!poorly.ecod.annotated)  %>%
+  mutate(label = if_else(diverse.for.label,annotation , ""))
 
 
-
-Fig4b = ggplot(diversity.ok.ecod, aes(x = num.families, y = num.topology.combinations, colour = category)) + 
-  geom_point() + 
+Fig4b = ggplot(diversity.ok.ecod) + 
+  #geom_point(aes(x = num.proteins, y = num.topology.combinations, colour = category)) + 
+  #geom_vline(aes(xintercept = median.num.prot), col = "red", linetype = "dashed") +
+  geom_point(aes(x = num.families, y = num.topology.combinations, colour = category)) + 
+  geom_vline(aes(xintercept = median.num.fam), col = "red", linetype = "dashed") +
+  geom_hline(aes(yintercept = median.num.topology.combinations), col = "red", linetype = "dashed") +
   scale_x_log10() + 
-  ggrepel::geom_label_repel(aes(label = label), size = 3) + 
+  #ggrepel::geom_label_repel(aes(x = num.proteins, y = num.topology.combinations, colour = category, label = label), size = 3) + 
+  ggrepel::geom_label_repel(aes(x = num.families, y = num.topology.combinations, colour = category, label = label), size = 3) + 
   scale_colour_manual(values = PHROG.COLOR.MAP) + 
-  labs(x = "Number of families", y = "Number of fold combinations") + 
+  labs(x = "Number of representative proteins", y = "Number of fold combinations") + 
   guides(colour = "none") + theme_minimal()
 
 p.panelab <- plot_grid(Fig4a, Fig4b, labels = c("A", "B"), label_size = 8, ncol = 2, rel_widths  = c(1,2))
@@ -234,7 +246,8 @@ levels = c("mean.num.t",
            "prop.mosaic.pairs.sequence.thr0p1",
            "prop.mosaic.pairs.sequence.thr0p3",
            "prop.mosaic.pairs.sequence.thr0p5", 
-           "prob.mosaicism")
+           "prob.mosaicism",
+           "num.mosaic.pairs")
 diversity.top = data.table::fread(sprintf("%sFigure4/mosaicism.top.diverse.classes.txt", OUTPUT.FIGURES.PATH)) %>%
   filter(proportion %in% levels)
 diversity.top = diversity.top %>% mutate(proportion = factor(proportion, levels = levels))
@@ -245,12 +258,15 @@ diversity.labeller[diversity.levels == "prop.mosaic.pairs.sequence.thr0p1"] <- "
 diversity.labeller[diversity.levels == "prop.mosaic.pairs.sequence.thr0p3"] <- "Proportion of mosaic pairs\nby sequence (30%)"
 diversity.labeller[diversity.levels == "prop.mosaic.pairs.sequence.thr0p5"] <- "Proportion of mosaic pairs\nby sequence (50%)"
 diversity.labeller[diversity.levels == "prob.mosaicism"] <- "Prob. of domain mosaicism\nbetween fold architectures\nif sharing a fold"
+diversity.labeller[diversity.levels == "num.mosaic.pairs"] <- "Number of pairs\nmosaic by domain"
+#diversity.labeller[diversity.levels == "num.reprseq.pairs.domain"] <- "Number of protein pairs\nwith domain mosaicism"
+#diversity.labeller[diversity.levels == "prop.mosaic"] <- "Prop. of proteins\nhaving any mosaic signal."
 names(diversity.labeller) <- diversity.levels
 
 p <- ggplot(diversity.top, aes(y = annotation, x = value, fill = category)) +
   geom_bar(stat = "identity", position=position_dodge()) +
   facet_grid(category ~ proportion, scales = "free", space = "free_y", 
-                    labeller = labeller(class = phrog.class.labels, proportion = diversity.labeller)) +
+                    labeller = labeller(category = phrog.class.labels, proportion = diversity.labeller)) +
   scale_fill_manual(values = PHROG.COLOR.MAP) + theme_minimal() + 
   theme(strip.text.y = element_text(face = "bold", size = 7, angle = 360)) + 
   labs(x = "", y = "") +
@@ -259,11 +275,9 @@ p <- ggplot(diversity.top, aes(y = annotation, x = value, fill = category)) +
 p.most.diverse <- p + guides(fill = "none")
 p.most.diverse
 
-
-diversity.top %>% filter(proportion == "mean.num.t")
-p.fig4 <- plot_grid(p.panelab, p.most.diverse, ncol = 1, labels = c("", "C"), label_size = 8)
+p.fig4 <- plot_grid(p.panelab, p.most.diverse, ncol = 1, labels = c("", "C"), label_size = 8, rel_heights = c(0.4, 0.6))
 p.fig4.filename <- sprintf("%sFigure4/Figure4.png", OUTPUT.FIGURES.PATH)
-ggsave(p.fig4.filename, p.fig4, width = 12, height = 8)
+ggsave(p.fig4.filename, p.fig4, width = 12, height = 10)
 
 
 ## supplementary version
@@ -285,7 +299,7 @@ names(diversity.labeller) <- diversity.levels.supp
 p <- ggplot(diversity.top.supp, aes(y = annotation, x = value, fill = category)) +
   geom_bar(stat = "identity", position=position_dodge()) +
   facet_grid(category ~ proportion, scales = "free", space = "free_y", 
-                    labeller = labeller(class = phrog.class.labels, proportion = diversity.labeller)) +
+                    labeller = labeller(category = phrog.class.labels, proportion = diversity.labeller)) +
   scale_fill_manual(values = PHROG.COLOR.MAP) + theme_minimal() + 
   theme(strip.text.y = element_text(face = "bold", size = 7, angle = 360)) + 
   labs(x = "", y = "")
@@ -293,7 +307,7 @@ p.most.diverse.supp <- p + guides(fill = "none")
 p.most.diverse.supp
 
 p.fig4.filename <- sprintf("%sFigure4/Figure4c_supplementary_version.png", OUTPUT.FIGURES.PATH)
-ggsave(p.fig4.filename, p.most.diverse.supp, width = 12, height = 8)
+ggsave(p.fig4.filename, p.most.diverse.supp, width = 15, height = 8)
 
 
 ```
@@ -312,7 +326,7 @@ p=ggplot(classes.with.few.ecod.annotated.prots.long, aes(x = annotation, y = pro
   theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 1 )) +
   scale_y_continuous(limits = c(0,1))+ 
   guides(fill = "none")+ 
-  labs(x = " function", y = "proportion of AA space covered by ECOD") +
+  labs(x = " function", y = "Proportion") +
   scale_fill_manual(values = PHROG.COLOR.MAP) +
   scale_alpha_discrete(range = c(1, .4))
 p
@@ -322,86 +336,7 @@ ggsave(sprintf("%sFigure_Supplementary/poor_ecod_annotation.png", OUTPUT.FIGURES
 
 ```
 
-# FIG 3 CD mosaic unknowns
-```{r}
-## unknowns
-table.unknowns.seq.filename <- sprintf("%sFigure3/table-unknown-seq.txt", OUTPUT.FIGURES.PATH) 
-table.unknowns.seq <- data.table::fread(table.unknowns.seq.filename) %>%
-  filter(weight >= 15) %>%
-  arrange(weight)
 
-# plot sequence
-table.unknowns.seq$category[table.unknowns.seq$category == "unknown"] <- "other"
-table.unknowns.seq$annotation <- factor(table.unknowns.seq$annotation, levels = unique(table.unknowns.seq$annotation))
-
-p.seq <- ggplot(data=table.unknowns.seq, aes(x=annotation, y=weight, fill=category)) + 
-  geom_bar(stat="identity") + 
-  scale_fill_manual(values = PHROG.COLOR.MAP) + 
-  theme_minimal() + 
-  theme(legend.text=element_text(size=6)) + 
-  labs(x = "", y = "weighted occurrence", fill = "category") + 
-  coord_flip()
-p.seq
-ggsave(filename = sprintf("%sFigure3/panelC.jpg", OUTPUT.FIGURES.PATH) , p.seq, width = 6, height = 5)
-
-
-# plot sequence: all not only mosaic
-table.all.unknowns.seq.filename <- sprintf("%sFigure3/table-all-unknown-seq.txt", OUTPUT.FIGURES.PATH) 
-table.all.unknowns.seq <- data.table::fread(table.all.unknowns.seq.filename) %>%
-  filter(weight >= 50) %>%
-  arrange(weight)
-
-table.all.unknowns.seq$category[table.all.unknowns.seq$category == "unknown"] <- "other"
-table.all.unknowns.seq$annotation <- factor(table.all.unknowns.seq$annotation, levels = unique(table.all.unknowns.seq$annotation))
-
-p.seq.supp <- ggplot(data=table.all.unknowns.seq, aes(x=annotation, y=weight, fill=category)) + 
-  geom_bar(stat="identity") + 
-  scale_fill_manual(values = PHROG.COLOR.MAP) + 
-  theme_minimal() + 
-  theme(legend.text=element_text(size=6)) + 
-  labs(x = "", y = "weighted occurrence", fill = "category") + 
-  coord_flip() + 
-  #ggtitle("Low confidence annotations of all unannotated proteins.") +
-  scale_y_log10()
-p.seq.supp
-ggsave(filename = sprintf("%sFigure3/panelC_supplementary.jpg", OUTPUT.FIGURES.PATH) , p.seq.supp, width = 10, height = 10)
-
-# plot ecod
-table.unknowns.ecod.filename <- sprintf("%sFigure3/table-unknown-ecod.txt", OUTPUT.FIGURES.PATH)
-table.unknowns.ecod <- fread(table.unknowns.ecod.filename)
-
-ecod.table <- table.unknowns.ecod %>% 
-  filter(freq>=0.02) %>%
-  arrange(freq)
-ecod.table$t_name <- factor(ecod.table$t_name, levels = unique(ecod.table$t_name))
-
-ecod.table$h.index <- sapply(1:nrow(ecod.table), function(index){
-  this.topology <- ecod.table$t_id[index]
-  this.topology.h.index <- strsplit(this.topology, ".", fixed = T)[[1]]
-  this.topology.h.index <- this.topology.h.index[-length(this.topology.h.index)]
-  this.topology.h.index <- as.character(paste(this.topology.h.index, collapse = "."))
-})
-ecod.table = ecod.table %>%
-    left_join(ecod_id_to_names_map %>% filter(level == "H") %>% select(h.index = id, h_name = name))
-display.h.name <- ecod.table$h_name
-display.h.name[ecod.table$t_name == ecod.table$h_name] <- "same"
-display.t.name <- sprintf("%s\n(H: %s)", ecod.table$t_name, display.h.name)
-
-getPalette <- colorRampPalette(RColorBrewer::brewer.pal(9, "Set1"))
-no.hom <- length(unique(ecod.table$h_name))
-p <- ggplot(data=ecod.table, aes(x=t_name, y=freq, fill=h_name)) + geom_bar(stat="identity")
-p <- p + scale_fill_manual(values = getPalette(no.hom))
-p <- p + scale_x_discrete(breaks = ecod.table$t_name, labels = display.t.name)
-p <- p + theme_minimal()
-p <- p + labs(x = "", y = "frequency")
-p <- p + guides(fill = "none")
-p.ecod <- p + coord_flip()
-p.ecod
-
-p.panelc.filename <- sprintf("%sFigure3/panelCD_unknowns.jpg", OUTPUT.FIGURES.PATH)
-p.panelc <- plot_grid(p.seq, p.ecod, labels = c("C", "D"), label_size = 25, ncol = 2)
-ggsave(filename = p.panelc.filename, p.panelc, width = 12, height = 6)
-```
 
 # Fig 3d NEW
 ```{r}
@@ -442,7 +377,45 @@ functions.low.cov=ggplot(data=table.unknown.seq.functions, aes(x=annotation, y=f
   labs(x = "", y = "frequency of weighted occurrence", fill = "category") + 
   coord_flip() 
 functions.low.cov
-ggsave(filename = sprintf("%sFigure3/low.cov.funct.all.proteins.jpg", OUTPUT.FIGURES.PATH) , functions.low.cov, width = 15, height = 6)
+ggsave(filename = sprintf("%sFigure3/low.cov.funct.all.proteins_old.jpg", OUTPUT.FIGURES.PATH) , functions.low.cov, width = 15, height = 6)
+
+
+ 
+annot.stats.per.category.and.mosaicism = data.table::fread(file = sprintf("%sFigure3/unknown_functions_mosaic_vs_nonmosaic.txt", OUTPUT.FIGURES.PATH))
+
+annots.within.proteins.with.significant.higher.mosaic = annot.stats.per.category.and.mosaicism %>%
+   filter(corrected.pval < 0.05 & odds.ratio > 1) %>%
+  select(annotation, category, mosaic, prop.proteins.has.this.annot, odds.ratio, corrected.pval) %>%
+   arrange(desc(odds.ratio))
+write.xlsx(x = annots.within.proteins.with.significant.higher.mosaic, 
+           file = sprintf("%stables/Supplementary_table_mosaic_vs_ninmosaic.xlsx", OUTPUT.FIGURES.PATH), 
+           sheetName = "Annotations in mosaic vs non-mosaic proteins", 
+  col.names = TRUE, row.names = TRUE, append = TRUE)
+
+
+ss=annot.stats.per.category.and.mosaicism %>%
+  arrange(desc(odds.ratio)) %>%
+  filter(corrected.pval < 0.05) %>%
+  head(60) %>%
+  mutate(mosaic = if_else(mosaic, "Mosaic", "Not mosaic"))
+  
+ss$mosaic = factor(ss$mosaic, levels = c("Not mosaic", "Mosaic"))
+ss$annotation = factor(ss$annotation, levels = unique(ss %>% arrange((odds.ratio)) %>% pull(annotation)))
+p.low.cov = ggplot(ss, aes(x=annotation, y = prop.proteins.has.this.annot, alpha = mosaic, fill = category)) +
+  geom_bar(stat="identity", position = position_dodge2(width = 0.8, preserve = "single"), col = "black") + 
+  scale_fill_manual(values = PHROG.COLOR.MAP) +
+  #scale_color_manual(values = PHROG.COLOR.MAP) +
+  guides(col = "none") +
+  scale_alpha_manual(values = c("Mosaic" = 1, "Not mosaic" = 0.4)) +
+  #facet_grid(.~mosaic) +
+  theme_minimal() + 
+  guides(fill = "none", color = "none") + 
+  theme(legend.text=element_text(size=4)) + 
+  labs(x = "", y = "Proportion of proteins with this annotation", fill = "category") + 
+  coord_flip() 
+p.low.cov
+ggsave(filename = sprintf("%sFigure3/low.cov.funct.all.proteins.jpg", OUTPUT.FIGURES.PATH) ,p.low.cov , width = 15, height = 12)
+
 
 ```
 
@@ -452,12 +425,12 @@ ggsave(filename = sprintf("%sFigure3/low.cov.funct.all.proteins.jpg", OUTPUT.FIG
 domains.shared.in.mosaic.pairs = data.table::fread(file = sprintf("%sFigure3/domains-shared-by-mosaic-pairs.txt", OUTPUT.FIGURES.PATH))
 
 included.ecods = domains.shared.in.mosaic.pairs %>% 
-  filter(prop.family.pairs >= 0.02) %>%
+  filter(prop.protein.pairs >= 0.005) %>%
   pull(t_id)
 
 ecod.table <- domains.shared.in.mosaic.pairs %>% 
   filter(t_id %in% included.ecods)%>%
-  arrange(prop.family.pairs)
+  arrange(prop.protein.pairs)
 
 ecod.table$t_name = factor(ecod.table$t_name, 
                            levels = ecod.table %>% pull(t_name) %>% unique())
@@ -468,12 +441,12 @@ display.t.name <- sprintf("%s\n(H: %s)", ecod.table$t_name, display.h.name)
 
 getPalette <- colorRampPalette(RColorBrewer::brewer.pal(9, "Set1"))
 no.hom <- length(unique(ecod.table$h_name))
-p <- ggplot(data=ecod.table, aes(x=t_name, y=prop.family.pairs, fill=h_name)) + 
+p <- ggplot(data=ecod.table, aes(x=t_name, y=prop.protein.pairs, fill=h_name)) + 
   geom_bar(stat="identity", position = position_dodge2(width = 0.9, preserve = "single"), alpha = 1, color="black")
 p <- p + scale_fill_manual(values = getPalette(no.hom)) + scale_color_manual(values = getPalette(no.hom))
 p <- p + scale_x_discrete(breaks = ecod.table$t_name, labels = display.t.name)
 p <- p + theme_minimal() + theme(legend.text=element_text(size=6))
-p <- p + labs(x = "", y = "Proportion of family pairs")
+p <- p + labs(x = "", y = "Proportion of representative proteins pairs")
 p <- p + guides(fill = "none", color = "none") 
 p.shared.ecods <- p + coord_flip()
 p.shared.ecods
@@ -488,16 +461,30 @@ ggsave(filename = sprintf("%sFigure3/folds_shared_by_mosaic_proteins.jpg", OUTPU
 ```{r}
 domains.within.proteins = data.table::fread(file = sprintf("%sFigure3/domains-in-known-and-unknown.txt", OUTPUT.FIGURES.PATH))
 
+
+domains.within.proteins.with.significant.higher.mosaic = domains.within.proteins %>%
+   filter(corrected.pval < 0.05 & odds.ratio > 1) %>%
+  select(t_id, t_name, mosaic, prop.proteins.with.this.ecod.hit = freq.q, odds.ratio, corrected.pval) %>%
+   arrange(desc(odds.ratio))
+write.xlsx(x = domains.within.proteins.with.significant.higher.mosaic, 
+           file = sprintf("%stables/Supplementary_table_mosaic_vs_ninmosaic.xlsx", OUTPUT.FIGURES.PATH), 
+           sheetName = "Domains in mosaic vs non-mosaic proteins", 
+  col.names = TRUE, row.names = TRUE, append = TRUE)
+
+
 included.ecods = domains.within.proteins %>% 
-  filter(freq.q >= 0.025) %>%
+  filter(corrected.pval < 0.05) %>%
+  arrange(desc(odds.ratio)) %>%
+  head(30) %>%
+  #filter(freq.q >= 0.025) %>%
   pull(t_id) %>% unique()
 
 ecod.table <- domains.within.proteins %>% 
   filter(t_id %in% included.ecods)%>%
-  arrange(mosaic, num.families)
+  arrange(mosaic, odds.ratio)
 
 ecod.table$t_name = factor(ecod.table$t_name, 
-                           levels = ecod.table %>% filter(mosaic == "Mosaic") %>% arrange(num.families) %>% pull(t_name) %>% unique())
+                           levels = ecod.table %>% filter(mosaic == "Mosaic") %>% arrange(odds.ratio) %>% pull(t_name) %>% unique())
 ecod.table$mosaic = factor(ecod.table$mosaic, levels = c("Not mosaic", "Mosaic"))
 
 display.h.name <- ecod.table$h_name
@@ -512,7 +499,7 @@ p <- p + scale_fill_manual(values = getPalette(no.hom)) +
   scale_color_manual(values = getPalette(no.hom))
 p <- p + scale_x_discrete(breaks = ecod.table$t_name, labels = display.t.name)
 p <- p + theme_minimal() + theme(legend.text=element_text(size=4))
-p <- p + labs(x = "", y = "Proportion of families")
+p <- p + labs(x = "", y = "Proportion of representative proteins")
 p <- p + guides(fill = "none", color = "none", alpha = "none") + 
   scale_alpha_manual(values = c("Mosaic" = 1, "Not mosaic" = 0.3))
 p.domains <- p + coord_flip()
@@ -544,8 +531,90 @@ ggsave(sprintf("%s/Figure3/panelA_pairwise-seq.png", OUTPUT.FIGURES.PATH), fig3a
 ```{r}
 fig3ab = plot_grid(fig3a, p.shared.ecods, labels = c("A", "B"), label_size = 25, ncol = 2, rel_widths = c(0.4, 0.6))
 ggsave(sprintf("%s/Figure3/panelAB.pdf", OUTPUT.FIGURES.PATH), fig3ab,  width = 14, height = 5)
-fig3de = plot_grid(p.domains, functions.low.cov, labels = c("D", "E"), label_size = 25, ncol = 2,rel_widths = c(0.5, 0.5))
-ggsave(sprintf("%s/Figure3/panelDE.pdf", OUTPUT.FIGURES.PATH), fig3de,  width = 12, height = 6)
+fig3de = plot_grid(p.domains, p.low.cov, labels = c("D", "E"), label_size = 25, ncol = 2,rel_widths = c(0.5, 0.5))
+ggsave(sprintf("%s/Figure3/panelDE.pdf", OUTPUT.FIGURES.PATH), fig3de,  width = 15, height = 6)
+
+
+```
+
+
+
+#### Alternative versions of our figures
+# FIG 3 CD mosaic unknowns
+```{r}
+## unknowns
+table.unknowns.seq.filename <- sprintf("%sFigure_Alternatives/table-unknown-seq.txt", OUTPUT.FIGURES.PATH) 
+table.unknowns.seq <- data.table::fread(table.unknowns.seq.filename) %>%
+  filter(weight >= 15) %>%
+  arrange(weight)
+
+# plot sequence
+table.unknowns.seq$category[table.unknowns.seq$category == "unknown"] <- "other"
+table.unknowns.seq$annotation <- factor(table.unknowns.seq$annotation, levels = unique(table.unknowns.seq$annotation))
+
+p.seq <- ggplot(data=table.unknowns.seq, aes(x=annotation, y=weight, fill=category)) + 
+  geom_bar(stat="identity") + 
+  scale_fill_manual(values = PHROG.COLOR.MAP) + 
+  theme_minimal() + 
+  theme(legend.text=element_text(size=6)) + 
+  labs(x = "", y = "weighted occurrence", fill = "category") + 
+  coord_flip()
+p.seq
+ggsave(filename = sprintf("%sFigure_Alternatives/Functions_of_unknown_prots_with_seq_mosaicism_signal.jpg", OUTPUT.FIGURES.PATH) , p.seq, width = 6, height = 5)
+
+
+# plot sequence: all not only mosaic
+table.all.unknowns.seq.filename <- sprintf("%sFigure_Alternatives/table-all-unknown-seq.txt", OUTPUT.FIGURES.PATH) 
+table.all.unknowns.seq <- data.table::fread(table.all.unknowns.seq.filename) %>%
+  filter(weight >= 50) %>%
+  arrange(weight)
+
+table.all.unknowns.seq$category[table.all.unknowns.seq$category == "unknown"] <- "other"
+table.all.unknowns.seq$annotation <- factor(table.all.unknowns.seq$annotation, levels = unique(table.all.unknowns.seq$annotation))
+
+p.seq.supp <- ggplot(data=table.all.unknowns.seq, aes(x=annotation, y=weight, fill=category)) + 
+  geom_bar(stat="identity") + 
+  scale_fill_manual(values = PHROG.COLOR.MAP) + 
+  theme_minimal() + 
+  theme(legend.text=element_text(size=6)) + 
+  labs(x = "", y = "weighted occurrence", fill = "category") + 
+  coord_flip() + 
+  scale_y_log10()
+p.seq.supp
+ggsave(filename = sprintf("%sFigure_Alternatives/Functions_of_all_unknown_prots.jpg", OUTPUT.FIGURES.PATH) , p.seq.supp, width = 10, height = 10)
+
+# plot ecod
+table.unknowns.ecod.filename <- sprintf("%sFigure_Alternatives/table-unknown-ecod.txt", OUTPUT.FIGURES.PATH)
+table.unknowns.ecod <- fread(table.unknowns.ecod.filename)
+
+ecod.table <- table.unknowns.ecod %>% 
+  filter(freq.q>=0.005) %>%
+  arrange(freq.q)
+ecod.table$t_name <- factor(ecod.table$t_name, levels = unique(ecod.table$t_name))
+
+ecod.table$h.index <- sapply(1:nrow(ecod.table), function(index){
+  this.topology <- ecod.table$t_id[index]
+  this.topology.h.index <- strsplit(this.topology, ".", fixed = T)[[1]]
+  this.topology.h.index <- this.topology.h.index[-length(this.topology.h.index)]
+  this.topology.h.index <- as.character(paste(this.topology.h.index, collapse = "."))
+})
+ecod.table = ecod.table %>%
+    left_join(ecod_id_to_names_map %>% filter(level == "H") %>% select(h.index = id, h_name = name))
+display.h.name <- ecod.table$h_name
+display.h.name[ecod.table$t_name == ecod.table$h_name] <- "same"
+display.t.name <- sprintf("%s\n(H: %s)", ecod.table$t_name, display.h.name)
+
+getPalette <- colorRampPalette(RColorBrewer::brewer.pal(9, "Set1"))
+no.hom <- length(unique(ecod.table$h_name))
+p <- ggplot(data=ecod.table, aes(x=t_name, y=freq.q, fill=h_name)) + geom_bar(stat="identity")
+p <- p + scale_fill_manual(values = getPalette(no.hom))
+p <- p + scale_x_discrete(breaks = ecod.table$t_name, labels = display.t.name)
+p <- p + theme_minimal()
+p <- p + labs(x = "", y = "frequency")
+p <- p + guides(fill = "none")
+p.ecod <- p + coord_flip()
+p.ecod
+ggsave(filename = sprintf("%sFigure_Alternatives/Folds_shared_by_unknown_poteins_with_domain_signal.jpg", OUTPUT.FIGURES.PATH) , p.seq.supp, width = 10, height = 10)
 
 
 ```

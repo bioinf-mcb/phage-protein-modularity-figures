@@ -28,11 +28,68 @@ data.table::fwrite(hhr.phrogs.annotated, file = sprintf("%shhr.phrogs.annotated.
 rm(hhr.phrog.hits.parsed)
 rm(hhr.phrog.hits.raw)
 
+######################################## ANNOTATIONS ###################################################
 
+i=0
+hhr.phrogs.list = list()
+for (this.cov in MAIN.COVS.FOR.ANNOTATION) {
+  i = i+1
+  hhr.phrogs.list[[i]] = Get.significant.phrog.hits(hhr.phrogs.annotated, 
+                                                    min.prob.threshold = DEFAULT.MINIMUM.PROB.FOR.ANNOTATION, 
+                                                    min.qcov.threshold = this.cov, 
+                                                    min.scov.threshold = this.cov, 
+                                                    max.eval.threshold = DEFAULT.NAXIMUM.EVAL.FOR.ANNOTATION) %>%
+    distinct(qname, annotation, category, structural, include) %>%
+    mutate(annotation.coverage = this.cov)
+}
 
+hhr.phrogs = do.call('rbind', hhr.phrogs.list)
+data.table::fwrite(hhr.phrogs, file = sprintf("%shhr.phrogs",OUTPUT.DATA.PATH))
+
+# now only look at annotations that we want to include
+annotation.indexes = hhr.phrogs %>% 
+  distinct(annotation, category) %>% 
+  arrange(category, annotation) %>%
+  mutate(annotation.index = row_number())
+
+annotated.proteins.raw = hhr.phrogs %>%
+  filter(!is.na(annotation)) %>%
+  left_join(annotation.indexes, by = c("annotation", "category")) %>% 
+  select(qname, annotation.index, annotation, category, structural, annotation.coverage, include) 
+
+relaxely.annotated.proteins.including.multi.annot = annotated.proteins.raw %>%
+  filter(annotation.coverage == min(MAIN.COVS.FOR.ANNOTATION)) %>%
+  select(qname, annotation.index, annotation, category, structural, annotation.coverage, include) %>%
+  group_by(qname) %>%
+  # number of annotations including the excluded ones
+  mutate(num.annots = n_distinct(annotation)) %>%
+  ungroup() 
+
+surely.annotated.proteins.including.multi.annot = annotated.proteins.raw %>%
+  filter(annotation.coverage == DEFAULT.NINIMUM.COV.FOR.ANNOTATION) %>%
+  select(qname, annotation.index, annotation, category, structural, annotation.coverage, include) %>%
+  group_by(qname) %>%
+  mutate(num.annots = n_distinct(annotation)) %>%
+  ungroup() 
+data.table::fwrite(surely.annotated.proteins.including.multi.annot, file = sprintf("%ssurely.annotated.proteins.including.multi.annot",OUTPUT.DATA.PATH))
+data.table::fwrite(relaxely.annotated.proteins.including.multi.annot, file = sprintf("%srelaxely.annotated.proteins.including.multi.annot",OUTPUT.DATA.PATH))
+
+# We only include categories that have MIN.NUM.PROT including the proteins with multiple annotation
+included.category.sizes = rbind(surely.annotated.proteins.including.multi.annot, relaxely.annotated.proteins.including.multi.annot) %>%
+  group_by(annotation.index, annotation, category, structural, annotation.coverage, include) %>%
+  summarise(num.seq.per.annotation = n_distinct(qname[num.annots == 1]),
+            num.seq.per.annotation.including.multi.annot = n_distinct(qname)) %>%
+  ungroup()  %>%
+  filter(num.seq.per.annotation.including.multi.annot >= MIN.NUM.PROT & include == "TRUE") %>%
+  select(-num.seq.per.annotation.including.multi.annot)
+data.table::fwrite(included.category.sizes, file = sprintf("%sincluded.category.sizes",OUTPUT.DATA.PATH))
 
 
 ######################################### DOMAINS #######################################################
+########################################### ECOD DOMAIN HITS ####################################
+# TODO: THIS MAY BE COMMENTED OUT
+#ecod.domains.hits = ecod.domains.hits[!grepl("DEAD", ecod.domains.hits$f_name)]
+
 classes = rep("character", 16)
 ecod.domain.descriptions = read.delim(ECOD.DOMAIN.DESCRIPTION.FILEPATH, 
                                       skip = 4, header = TRUE, 
@@ -40,8 +97,7 @@ ecod.domain.descriptions = read.delim(ECOD.DOMAIN.DESCRIPTION.FILEPATH,
   select(X.uid, ecod_domain_id, arch_name, x_name, h_name, t_name, f_name, f_id) 
 
 
-ecod.domain.hits.raw = data.table::fread(
-  file = sprintf("%sprot-families/functional/hhblits-ecod.txt", DATA.PATH))
+ecod.domain.hits.raw = data.table::fread(file = ECOD.DOMAIN.HITS.PATH)
 
 ecod.domain.hits.parsed = Parse.Hhr.Raw.Result(ecod.domain.hits.raw) %>% 
   filter(  eval <= MAXIMUM.EVAL.FOR.DOMAIN &
@@ -143,27 +199,6 @@ hhr.table.filename = sprintf("%s/prot-families/all-by-all/hhblits/table-hhr.txt"
 table.hhr = data.table::fread(hhr.table.filename) %>%
   data.table::setkey()
 
-#pairwise.hits.data = table.hhr %>% 
-#  filter(prob >= MINIMUM.PROB.FOR.PAIRWISE.HIT) %>%
-#  mutate(hit.length = qend - qstart + 1) %>%
-#  filter(hit.length > MIN.HIT.LENGTH) %>%
-#  left_join(protein.similarity.data %>% select(qname, sname, similar.proteins))
-
-#data.table::fwrite(pairwise.hits.data, file = sprintf("%spairwise.hits.data.txt",OUTPUT.DATA.PATH))
-#rm(table.hhr)
-
-
-#seq.mosaicism.data = table.hhr %>%
-#  filter(prob >= MINIMUM.PROB.FOR.PAIRWISE.HIT &
-#         pident >= MINIMUM.PIDENT.FOR.PAIRWISE.HIT) %>%
-#  mutate(hit.length = qend - qstart + 1) %>%
-#  filter(hit.length > MINIMUM.HIT.LENGTH) %>%
-#  group_by(qname, sname)
-#  mutate(share.a.frgment = TRUE) %>%
-#  left_join(protein.similarity.data %>% select(qname, sname, similar.proteins))
-
-  
-
 
 #families.raw = readLines(FAMILIES.RAW.FILEPATH) %>%
 #  stringi::stri_split_lines() %>%
@@ -175,7 +210,6 @@ table.hhr = data.table::fread(hhr.table.filename) %>%
 #qnames.with.no.family = setdiff(repr.seq.lengths$name, families$qname)
 #families.singletons = data.frame(qname = qnames.with.no.family) %>% mutate(family = paste0("fam", 1+length(families.raw):length(families.raw)+length(qnames.with.no.family)))
 #families = rbind(families, families.singletons)
-
 
 
 families = data.table::fread(FAMILIES.FILEPATH) %>% select(qname = members, family)

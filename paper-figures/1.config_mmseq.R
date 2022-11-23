@@ -15,33 +15,33 @@ options(stringsAsFactors = F)
 DROPBOX.PATH =  "/Users/bognasmug/MGG Dropbox/"
 # DROPBOX.PATH =  "/Users/rmostowy/MGG Dropbox/"
 
-
 # TO DO: CHANGE IT BACK TO MAIN CLUSTER PROJECT ONCE IT IS CORRECT
-FAMILIES.FILEPATH = "/Users/bognasmug/MGG Dropbox/Projects/divRBP/rafals-figures/data/families/family-table.txt"  #"/Users/bognasmug/MGG Dropbox/Bogna Smug/Projects/divRBP/phage-pp-workdir-refseq-hhblits/output/prot-families/families/families/dataset-full/family-table.txt"
-#FAMILIES.RAW.FILEPATH = "/Users/bognasmug/MGG Dropbox/Projects/divRBP/phage-pp-workdir-refseq-hhblits/output/prot-families/families/dataset-full/mcl/repr-hits-pairwise-prob95-mcl.out"
+FAMILIES.FILEPATH = "/Users/bognasmug/MGG Dropbox/Projects/divRBP/rafals-figures/data/mmseqs/family-table.txt"  #"/Users/bognasmug/MGG Dropbox/Bogna Smug/Projects/divRBP/phage-pp-workdir-refseq-hhblits/output/prot-families/families/families/dataset-full/family-table.txt"
+# TO DO: CHANGE IT BACK TO MAIN CLUSTER PROJECT ONCE IT IS CORRECT
+#PROFILE.SIMILARITY.TABLE = sprintf("%sprot-families/families/dataset-full/repr-hits-pairwise-prob50.csv", DATA.PATH)
+PROFILE.SIMILARITY.TABLE = "/Users/bognasmug/MGG Dropbox/Projects/divRBP/rafals-figures/data/mmseqs/table_qcov-scov_all.txt"
+
+
 
 PROJECT.PATH = sprintf("%s/Projects/divRBP/",DROPBOX.PATH)
 source(sprintf("%spaper-figures/scripts/helpers.R", PROJECT.PATH))
-DATA.PATH = sprintf("%s/phage-pp-workdir-refseq-hhblits/output/", PROJECT.PATH)
+DATA.PATH = sprintf("%sphage-pp-workdir-refseq-mmseqs-092022/output/", PROJECT.PATH)
 
-# TO DO: CHANGE IT BACK TO MAIN CLUSTER PROJECT ONCE IT IS CORRECT
-#PROFILE.SIMILARITY.TABLE = sprintf("%sprot-families/families/dataset-full/repr-hits-pairwise-prob50.csv", DATA.PATH)
-PROFILE.SIMILARITY.TABLE = "/Users/bognasmug/MGG Dropbox/Projects/divRBP/rafals-figures/data/families/table_qcov-scov_all.txt"
 REPR.SEQ.LENGTH.FILENAME = sprintf("%sprot-families/representative/repr-seqs-lengths.txt", DATA.PATH)
 
 PHROG.TABLE.PATH = sprintf("%sDatabases/Phrogs/phrog_annot_v4.tsv", DROPBOX.PATH)
-PHROG.HHPRED.HITS.PATH = sprintf("%sprot-families/functional/hhblits-phrogs.txt", DATA.PATH)
+PHROG.HHPRED.HITS.PATH = "/Users/bognasmug/MGG Dropbox/Projects/divRBP/phage-pp-workdir-refseq-mmseqs-092022/intermediate/prot-families/functional/hhblits-phrogs.txt"
 # downloaded from: http://prodata.swmed.edu/ecod/complete/distribution:
 ECOD.DOMAIN.DESCRIPTION.FILEPATH = sprintf("%sDatabases/ECOD/ECOD/ecod.develop283.domains.txt", DROPBOX.PATH)
 MANUAL.PHROG.CLASS.MAPPING = sprintf("%sDatabases/Phrogs/custom/v3beta_phrogs-table-rafal-27_09.xlsx", DROPBOX.PATH) 
-ECOD.DOMAIN.HITS.PATH = sprintf("%sprot-families/functional/hhblits-ecod.txt", DATA.PATH)
 
 # where to output tables and figures
-OUTPUT.DATA.PATH = sprintf("%spaper-figures/tables/", PROJECT.PATH)
-OUTPUT.FIGURES.PATH = sprintf("%spaper-figures/", PROJECT.PATH)
+OUTPUT.DATA.PATH = sprintf("%spaper-figures/Figures_mmseq/tables/", PROJECT.PATH)
+OUTPUT.FIGURES.PATH = sprintf("%spaper-figures/Figures_mmseq/", PROJECT.PATH)
 dir.create(OUTPUT.FIGURES.PATH, recursive = TRUE)
 dir.create(OUTPUT.DATA.PATH, recursive = TRUE)
-
+ECOD.DOMAIN.HITS.PATH = "/Users/bognasmug/MGG Dropbox/Projects/divRBP/phage-pp-workdir-refseq-mmseqs-092022/intermediate/prot-families/functional/hhblits-ecod.txt"
+#sprintf("%sprot-families/functional/hhblits-ecod.txt", DATA.PATH)
 
 
 MINIMUM.COVERAGES.FOR.ANNOTATION = seq(0.05, 1, 0.05)
