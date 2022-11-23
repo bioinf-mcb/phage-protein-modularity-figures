@@ -1,0 +1,356 @@
+---
+title: "generate_figures"
+author: "Bogna Smug"
+date: '2022-09-28'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+node.size.and.color.map = data.table::fread(sprintf("%snode.size.and.color.map.txt", OUTPUT.DATA.PATH)) %>% as.data.frame()
+```
+
+
+# Fig 1
+```{r}
+annotation.uncertainty.data.vs.cov = data.table::fread(sprintf("%sFigure1/Fig1_Tradeoff_cov.txt", OUTPUT.FIGURES.PATH)) %>% as.data.frame()
+ggplot(data = annotation.uncertainty.data.vs.cov %>%
+          mutate(`probability\nthreshold [%]` = as.factor(minimum.probability),
+                  annotation.coverage = 100*annotation.coverage)) +
+  geom_point(aes(x = annotation.coverage, y = perc.unique.annotation, linetype = `probability\nthreshold [%]`), col = "darkgreen") + 
+  geom_line(aes(x = annotation.coverage, y = perc.unique.annotation, linetype = `probability\nthreshold [%]`), col = "darkgreen") + 
+  geom_point(aes(x = annotation.coverage, y = perc.annotated, linetype = `probability\nthreshold [%]`), col = "darkred") + 
+  geom_line(aes(x = annotation.coverage, y = perc.annotated, linetype = `probability\nthreshold [%]`), col = "darkred") + 
+  Get.Theme(legend.position = "right") +
+  xlab("sequence coverage threshold [%]") +
+  theme( axis.title.y.right = element_text(colour = "darkred"),
+         axis.text.y.right = element_text(colour = "darkred"),
+          axis.title.y = element_text(colour = "darkgreen"),
+         axis.text.y = element_text(colour = "darkgreen")) +
+  scale_y_continuous(name = "functional uniqueness \n(% of annotated proteins with hits to a single function)",
+                     limits = c(0,101),
+                     breaks = seq(0,100,10),
+                     sec.axis=sec_axis(~.*1,name="functional coverage \n(% proteins with a hit to any known function)"))
+ggsave(sprintf("%sFigure1/Fig1_Tradeoff_cov.jpg", OUTPUT.FIGURES.PATH), width = FIG.WIDTH, height = FIG.HEIGHT, units = "cm")
+
+annotation.uncertainty.data.vs.eval = data.table::fread(sprintf("%sFigure1/Fig1_Tradeoff_eval.txt", OUTPUT.FIGURES.PATH))
+ggplot(data = annotation.uncertainty.data.vs.eval %>%
+          mutate(`sequence coverage\nthreshold [%]`  = as.factor(annotation.coverage))) +
+  geom_point(aes(x = maximum.eval, y = perc.unique.annotation, linetype = `sequence coverage\nthreshold [%]` ), col = "darkgreen") + 
+  geom_line(aes(x = maximum.eval, y = perc.unique.annotation, linetype = `sequence coverage\nthreshold [%]` ), col = "darkgreen") + 
+  geom_point(aes(x = maximum.eval, y = perc.annotated, linetype = `sequence coverage\nthreshold [%]` ), col = "darkred") + 
+  geom_line(aes(x = maximum.eval, y = perc.annotated, linetype = `sequence coverage\nthreshold [%]` ), col = "darkred") + 
+  Get.Theme(legend.position = "right") +
+  xlab("e-value") +
+  theme( axis.title.y.right = element_text(colour = "darkred"),
+         axis.text.y.right = element_text(colour = "darkred"),
+          axis.title.y = element_text(colour = "darkgreen"),
+         axis.text.y = element_text(colour = "darkgreen")) +
+  scale_y_continuous(name = "functional uniqueness \n(% of annotated proteins with hits to a single function)",
+                     limits = c(0,101),
+                     breaks = seq(0,100,10),
+                     sec.axis=sec_axis(~.*1,name="functional coverage \n(% proteins with a hit to any known function)")) +
+  scale_x_log10()
+
+ggsave(sprintf("%sFigure1/Fig1_Tradeoff_eval.jpg", OUTPUT.FIGURES.PATH), width = FIG.WIDTH, height = FIG.HEIGHT, units = "cm")
+
+annotation.uncertainty.data.vs.prob = data.table::fread(sprintf("%sFigure1/Fig1_Tradeoff_prob.txt", OUTPUT.FIGURES.PATH))
+ggplot(data = annotation.uncertainty.data.vs.prob %>%
+          mutate(`sequence coverage\nthreshold [%]`  = as.factor(annotation.coverage))) +
+  geom_point(aes(x = minimum.probability, y = perc.unique.annotation, linetype = `sequence coverage\nthreshold [%]` ), col = "darkgreen") + 
+  geom_line(aes(x = minimum.probability, y = perc.unique.annotation, linetype = `sequence coverage\nthreshold [%]` ), col = "darkgreen") + 
+  geom_point(aes(x = minimum.probability, y = perc.annotated, linetype = `sequence coverage\nthreshold [%]` ), col = "darkred") + 
+  geom_line(aes(x = minimum.probability, y = perc.annotated, linetype = `sequence coverage\nthreshold [%]` ), col = "darkred") + 
+  Get.Theme(legend.position = "right") +
+  xlab("probability [%]") +
+  theme( axis.title.y.right = element_text(colour = "darkred"),
+         axis.text.y.right = element_text(colour = "darkred"),
+          axis.title.y = element_text(colour = "darkgreen"),
+         axis.text.y = element_text(colour = "darkgreen")) +
+  scale_y_continuous(name = "functional uniqueness \n(% of annotated proteins with hits to a single function)",
+                     limits = c(0,101),
+                     breaks = seq(0,100,10),
+                     sec.axis=sec_axis(~.*1,name="functional coverage \n(% proteins with a hit to any known function)"))
+ggsave(sprintf("%sFigure1/Fig1_Tradeoff_prob.jpg", OUTPUT.FIGURES.PATH), width = FIG.WIDTH, height = FIG.HEIGHT, units = "cm")
+```
+
+
+# Sup Fig1 : Annotation melting: connecting categories that have high conditional probabilities of annotating the same proteins
+```{r}
+annotation.network = data.table::fread(sprintf("%sFigure1/Fig1b_Phrogs_melting.txt", OUTPUT.FIGURES.PATH)) %>% as.data.frame()
+
+coverages = unique(annotation.network$annotation.coverage)
+for (this.cov in coverages) {
+  
+  annotation.network.this.cov = annotation.network %>% 
+    filter(annotation.coverage == this.cov) %>%
+     # only include categories that appear reasonably often in our data
+    filter(from %in% node.size.and.color.map$node &
+           to %in% node.size.and.color.map$node)
+
+
+  annotated_net = Annotate_Graph(data.for.network = annotation.network.this.cov, 
+                                edge.colors = NULL,
+                                node.color.map = node.size.and.color.map %>% distinct(node, color),
+                                node.size.map = node.size.and.color.map %>% distinct(node, size),
+                                line.color.variable = "max.prob.conditional",
+                                vertex.size = 1)
+  
+  if (this.cov > 0.5) {
+    width = 15
+    height = 15
+    cex=0.5
+  } else {
+    width = 30
+    height = 20
+    cex = 0.2
+  }
+  
+  g=VisualiseGGnetwork(annotated_net, label_size = 2, cex = cex)
+  print(g)
+  ggsave(sprintf("%sFigure1/Fig1b_Phrogs_melting_cov%s.jpg", OUTPUT.FIGURES.PATH, this.cov), g, width = width, height = height, units = "cm")
+  
+}
+```
+# SHINY PLOTS
+```{r}
+
+  tile.data.multi = data.table::fread(sprintf("%sShiny-Plots/multiple_domains.domain.positions.txt", OUTPUT.FIGURES.PATH)) %>% filter(domain.level == "T")
+  tile.data = data.table::fread(sprintf("%sShiny-Plots/domain.positions.txt", OUTPUT.FIGURES.PATH)) %>% filter(domain.level == "T")
+
+    
+  for (this.category in unique(tile.data$category)) {
+      domain.position.plots.this.category = list()
+      domain.combination.plots.this.category = list()
+      this.category.annotations =   tile.data %>% filter(category == this.category) %>% 
+        pull(annotation) %>% 
+        unique()
+      num.annots.this.category = length(this.category.annotations)
+      for (this.annotation in this.category.annotations) {
+        this.tile.data = tile.data %>% filter(annotation == this.annotation & category == this.category)
+        this.tile.data.multi = tile.data.multi %>% filter(annotation == this.annotation & category == this.category)
+      
+        colormap = this.tile.data %>% distinct(domain) %>% filter(!(domain %in% c("undetected", "multiple domains")))
+        colormap$color = randomcoloR::distinctColorPalette(nrow(colormap))
+        colormap = rbind(colormap, data.frame(domain = c("undetected", "multiple domains"), 
+                                                  color = c( "#FFFFFF",  "#000000"), stringsAsFactors = FALSE))
+        colm = colormap$color
+        names(colm) = colormap$domain
+     
+        gg_rect = Show.Domain.Position.Within.Data(
+          this.tile.data %>% mutate(annotation = this.annotation),
+          colm, 
+          theme.no.verical) +
+            theme(strip.text.x = element_text(size = 1.5*text.size), 
+            legend.position = "none") +
+              theme(
+                axis.title.x = element_text(size = text.size),
+                axis.title.y = element_text(size = text.size),
+                axis.text.x = element_blank(),
+                axis.text.y = element_blank(),
+                axis.ticks = element_blank())
+                
+        domain.position.plots.this.category[[this.annotation]] =  gg_rect
+        
+        
+        gg_rect_multi = Show.Domain.Position.Within.Data(
+          this.tile.data.multi %>% mutate(annotation = this.annotation),
+          colm, 
+          theme.no.verical) +
+            theme(strip.text.x = element_text(size = 1.5*text.size), 
+            legend.position = "none") +
+              theme(
+                axis.title.x = element_text(size = text.size),
+                axis.title.y = element_text(size = text.size),
+                axis.text.x = element_blank(),
+                axis.text.y = element_blank(),
+                axis.ticks = element_blank())
+                
+        domain.combination.plots.this.category[[this.annotation]] =  gg_rect_multi
+        domain.position.plots.this.category[[this.annotation]] =  gg_rect
+  }
+  
+      
+    ncol = ceiling(num.annots.this.category/4)
+    jpeg(sprintf("%sShiny-Plots/domain.positions_%s.jpg", OUTPUT.FIGURES.PATH, this.category), 
+         width = FIG.WIDTH*ncol/2, 
+         height = FIG.HEIGHT*2, units = "cm", res = 600)
+  egg::ggarrange(plots = domain.position.plots.this.category, 
+                 ncol = ncol)
+  dev.off()
+  
+  
+  
+      jpeg(sprintf("%sShiny-Plots/multiple_domains.domain.positions_%s.jpg", OUTPUT.FIGURES.PATH, this.category), 
+         width = FIG.WIDTH*ncol/2, 
+         height = FIG.HEIGHT*2, units = "cm", res = 600)
+  egg::ggarrange(plots = domain.combination.plots.this.category, 
+                 ncol = ncol)
+  dev.off()
+  
+}
+
+```
+
+# Fig. 1c: diversity
+```{r}
+diversity.data = data.table::fread(sprintf("%sFigure1/Fig1_Diversity_vs_mosaicism.txt", OUTPUT.FIGURES.PATH))
+
+ggplot(diversity.data %>%
+  tidyr::gather(key = "diversity.stat", value = "number", num.families, num.topologies, num.topology.combinations)) +
+  geom_col(aes(x = annotation, y = number, fill = category, alpha = diversity.stat), position = "dodge") +
+  Get.Theme(text_size = 4, legend.position = "bottom") +
+  facet_grid(. ~category, scales = "free", space = "free") + xlab("") + ylab("") +
+  guides(fill = "none") +
+  scale_alpha_manual(values = c("num.families" = 1, "num.topologies" = 0.7, "num.topology.combinations" = 0.4)) +
+  scale_fill_manual(values = PHROG.COLOR.MAP)
+ggsave(sprintf("%sFigure1/Fig1_Diversity.jpg", OUTPUT.FIGURES.PATH), width = 1.3*FIG.WIDTH, height = FIG.HEIGHT, units = "cm")
+
+ggplot(diversity.data, aes(x = num.families, y = num.topology.combinations)) +
+  geom_point(aes(col = category), size = 2) +
+  geom_text(aes(label = annotation, col = category), nudge_y = 1, size = 1.5) +
+  Get.Theme(text_size = 4, legend.position = "bottom") +
+  guides(col = "none") +
+  scale_color_manual(values = PHROG.COLOR.MAP)
+  #facet_grid(. ~category, scales = "free", space = "free") 
+  #geom_smooth()
+ggsave(sprintf("%sFigure1/Fig1_Diversity_vs_mosaicism.jpg", OUTPUT.FIGURES.PATH), width = 1.3*FIG.WIDTH, height = FIG.HEIGHT, units = "cm")
+```
+# Fig 2a: heatmap of ECODS found in multiple categories
+```{r}
+h.domain.occurence.data = data.table::fread(sprintf("%sFigure2/H_domains.txt", OUTPUT.FIGURES.PATH)) %>% as.data.frame()
+ggplot(h.domain.occurence.data %>% 
+         #filter(h_name != "NO_H_NAME" ) %>%
+         # delete singletonns
+         group_by(h_id) %>%
+         mutate(num_annot = n_distinct(annotation)) %>%
+         filter(num_annot >= 2)) +
+  geom_tile(aes(x=h_name, y = annotation, fill = category)) + 
+  Get.Theme(text_size = 6) +
+  facet_grid(category ~., scales = "free", space = "free") + xlab("") + ylab("") +
+  guides(fill = "none") +
+  scale_fill_manual(values = PHROG.COLOR.MAP)
+
+ggsave(sprintf("%sFigure2/H_domains.jpg", OUTPUT.FIGURES.PATH), width = 1*FIG.WIDTH, height = 3*FIG.HEIGHT, units = "cm")
+```
+# Fig 2b: network of annotations on low cov: connect the ones that appear at least in 3 families 
+```{r}
+annotation.network.low.cov = data.table::fread(sprintf("%sFigure2/Fig2b_shared_annotations.txt", OUTPUT.FIGURES.PATH))
+
+annotation.network.low.cov = annotation.network.low.cov %>% 
+    filter(from %in% node.size.and.color.map$node &
+           to %in% node.size.and.color.map$node) 
+
+
+  annotated_net = Annotate_Graph(data.for.network = annotation.network.low.cov %>% mutate(weight = 1), 
+                                edge.colors = NULL,
+                                node.color.map = node.size.and.color.map %>% distinct(node, color),
+                                node.size.map = node.size.and.color.map %>% distinct(node, size),
+                                line.color.variable = "weight",
+                                vertex.size = 1)
+  
+  g=VisualiseGGnetwork(annotated_net, label_size = 2, cex = 0.2)
+  print(g)
+  ggsave(sprintf("%sFigure2/Fig2b_Phrogs_melting_low_cov.jpg", OUTPUT.FIGURES.PATH, this.cov), g, width = 30, height = 30, units = "cm")
+
+```
+# Mosaicism between and within annotations
+```{r}
+mosaicism.between.and.within.annotations = data.table::fread(file = sprintf("%sFigure3/Fig3b_mosaicism_between_and_within_f.txt", OUTPUT.FIGURES.PATH))
+ggplot(mosaicism.between.and.within.annotations %>%
+         mutate(annotation.x = factor(annotation.x, levels = mosaicism.between.and.within.annotations %>% 
+                                        distinct(category.x, annotation.x) %>%
+                                        arrange(category.x, annotation.x) %>%
+                                        pull(annotation.x))) %>%
+         mutate(annotation.y = factor(annotation.y, levels = mosaicism.between.and.within.annotations %>%  
+                                        distinct(category.x, annotation.x) %>%
+                                        arrange(category.x, annotation.x) %>%
+                                        pull(annotation.x)))) +
+  geom_tile(aes(x = annotation.x, y = annotation.y, fill = type)) +
+  #facet_grid(category.x ~ ., space = "free", scales = "free") +
+  guides(fill = "none") +
+  scale_fill_manual(values = c(PHROG.COLOR.MAP, "different.cat" = "#000000","not mosaic" =  "#F5F5F5")) +
+  Get.Theme() + 
+  theme(panel.grid.major.x = element_blank(),
+  panel.grid.minor.x = element_blank(),
+  panel.grid.major.y = element_blank(),
+  panel.grid.minor.y = element_blank()) + xlab("") + ylab("")
+ggsave(sprintf("%sFigure3/Fig3b_mosaicism_between_and_within_f.jpg", OUTPUT.FIGURES.PATH, this.cov), width = 30, height = 30, units = "cm")
+```
+
+# Mosaicism between functions
+```{r}
+network.mosaicism.between.annotations = data.table::fread(sprintf("%sFigure3/Fig3a_Mosaicism_between_functions.txt", OUTPUT.FIGURES.PATH))
+  annotated_net_mbf = Annotate_Graph(data.for.network = network.mosaicism.between.annotations %>% mutate(weight = 1), 
+                                edge.colors = NULL,
+                                node.color.map = node.size.and.color.map %>% select(node, color),
+                                node.size.map = node.size.and.color.map %>% select(node, size),
+                                line.color.variable = "weight",
+                                vertex.size = 1)
+
+  g = VisualiseGGnetwork(annotated_net_mbf, label_size = 3)
+  ggsave(sprintf("%sFigure3/Fig3a_Mosaicism_between_functions.jpg", OUTPUT.FIGURES.PATH), g, width = width*0.7, height = height*0.7)
+```
+
+
+# Mosaicism within functions
+```{r}
+domain.sharing.par.number.data.most.popular.annotations.only = data.table::fread(sprintf("%sFigure4/Fig4a_Mosaicism_within_class_min_3_family_pairs.txt", OUTPUT.FIGURES.PATH))
+ggplot(domain.sharing.par.number.data.most.popular.annotations.only) +
+  geom_col(aes(x = annotation, y = prob.moisaicism.cond.shared.f, fill = category)) +
+  facet_grid(.~category, scales = "free",  space = "free_x") +
+  guides(fill = "none") +
+  Get.Theme(text_size = 4) +
+  scale_fill_manual(values = PHROG.COLOR.MAP) + xlab("") + ylab("P(dishared X domain | shared F domain & multiple X domains)")
+ggsave(sprintf("%sFigure4/Fig4a_Mosaicism_within_class_min_3_family_pairs.jpg", OUTPUT.FIGURES.PATH), width = 1.3*FIG.WIDTH, height = FIG.HEIGHT, units = "cm")
+```
+
+
+# Density plots
+```{r} 
+
+included.category.sizes = data.table::fread(sprintf("%sincluded.category.sizes.txt", OUTPUT.DATA.PATH))
+annotated.hhr.table = data.table::fread(sprintf("%sDensity-Plots/cov.vs.pident.txt", OUTPUT.FIGURES.PATH))
+buylrd = c("#313695", "#4575B4", "#74ADD1", "#ABD9E9", "#E0F3F8", "#FFFFBF","#FEE090", "#FDAE61", "#F46D43", "#D73027", "#A50026") 
+
+ # plot all hits
+jpeg(sprintf("%sDensity-Plots/cov.vs.pident.per.function.all_hits.jpg", OUTPUT.FIGURES.PATH), 
+       width = FIG.WIDTH, height = FIG.HEIGHT, units = "cm", res = 300)
+smoothScatter(x = annotated.hhr.table %>% pull(pident),
+                  y = annotated.hhr.table %>% pull(max.cov),
+                  colramp=colorRampPalette(c(buylrd)),
+                  main="",
+                  xlab="pident",
+                  ylab="cov")
+dev.off()
+ 
+ 
+ # plot only hits within a function
+ annotated.hhr.table.within.fnction = annotated.hhr.table   %>%
+   filter(qannotation == sannotation)
+  
+
+for (this.category in unique(included.category.sizes$category)) {
+  this.category.annotations = included.category.sizes %>% 
+    filter(category == this.category) %>% 
+    distinct(annotation) %>% 
+    inner_join(annotated.hhr.table.within.fnction %>% distinct(qannotation) %>% select(annotation = qannotation)) %>%
+    pull(annotation)
+  
+  jpeg(sprintf("%sDensity-Plots/cov.vs.pident.per.function.%s.jpg", OUTPUT.FIGURES.PATH, this.category), 
+       width = FIG.WIDTH*1.5, height = FIG.HEIGHT*length(this.category.annotations)/4, units = "cm", res = 300)
+  par(mfrow=c(ceiling(length(this.category.annotations)/4), 4)) 
+  for (this.annotation in this.category.annotations) {
+    this.annotations.hits = annotated.hhr.table.within.fnction %>% filter(qannotation == this.annotation & sannotation == this.annotation)
+    smoothScatter(x = this.annotations.hits %>% pull(pident),
+                  y = this.annotations.hits %>% pull(max.cov),
+                  colramp=colorRampPalette(c(buylrd)),
+                  main=sprintf("%s",this.annotation),
+                  xlab="pident",
+                  ylab="cov")
+    
+  }
+  dev.off()
+}
+```
+
