@@ -97,34 +97,48 @@ data.table::fwrite(ecod_id_to_names_map, file = sprintf("%secod_id_to_names_map.
 
 
 ecod.domains.hits = ecod.domain.hits.all  %>%
-  left_join(ecod.annotation.map, by = c("domain"))  
+  left_join(ecod.annotation.map, by = c("domain"))  %>%
+  # delete the ones where family is unknown
+  filter(!is.na(f_ind))
+  
+  
 data.table::fwrite(ecod.domains.hits, file = sprintf("%secod.domains.hits.txt",OUTPUT.DATA.PATH))
 rm(ecod.domain.hits.raw)
 
 
 ###################################### PAIRWISE HITS ##################################
+seq.lengths = data.table::fread(REPR.SEQ.LENGTH.FILENAME)
+protein.similarity.data.raw = read.csv(PROFILE.SIMILARITY.TABLE,
+                                   header = TRUE) 
+protein.similarity.data = protein.similarity.data.raw %>%
+  # TODO: delete when we use the original file
+  select(qname = query, sname = subject, prob, scov, qcov, pident) %>%
+  left_join(seq.lengths %>% select(qname = name, qlength = length)) %>%
+  left_join(seq.lengths %>% select(sname = name, slength = length))  %>%
+  mutate(q.hit.length = qlength*qcov,
+         s.hit.length = slength*scov) %>%
+  as.data.table()
+protein.similarity.data[, hit.length := pmin(s.hit.length, q.hit.length)]
+protein.similarity.data[, max.cov := pmax(scov, qcov, na.rm = TRUE)]
+protein.similarity.data[, min.hit.len := pmin(q.hit.length, s.hit.length, na.rm = TRUE)]
+data.table::fwrite(protein.similarity.data, file = sprintf("%sprotein.similarity.data.txt",OUTPUT.DATA.PATH))
+
+#mutate(similar.proteins = 
+#         qcov >= MINIMUM.COV.FOR.PROTEIN.SIMILARITY | 
+#         scov >= MINIMUM.COV.FOR.PROTEIN.SIMILARITY) 
+
 hhr.table.filename = sprintf("%s/prot-families/all-by-all/hhblits/table-hhr.txt", DATA.PATH)
 table.hhr = data.table::fread(hhr.table.filename) %>%
   data.table::setkey()
 
+#pairwise.hits.data = table.hhr %>% 
+#  filter(prob >= MINIMUM.PROB.FOR.PAIRWISE.HIT) %>%
+#  mutate(hit.length = qend - qstart + 1) %>%
+#  filter(hit.length > MIN.HIT.LENGTH) %>%
+#  left_join(protein.similarity.data %>% select(qname, sname, similar.proteins))
 
-hiting.protein.lengths = table.hhr %>%
-  distinct(qname, sname, qlength, slength)
-
-protein.similarity.data = read.csv(PROFILE.SIMILARITY.TABLE,
-                                   header = TRUE) %>%
-  mutate(similar.proteins = 
-           qcov >= MINIMUM.COV.FOR.PROTEIN.SIMILARITY | 
-           scov >= MINIMUM.COV.FOR.PROTEIN.SIMILARITY) %>%
-  left_join(hiting.protein.lengths)
-
-
-
-pairwise.hits.data = table.hhr %>% 
-  filter(prob >= MINIMUM.PROB.FOR.PAIRWISE.HIT) %>%
-  mutate(hit.length = qend - qstart + 1) %>%
-  filter(hit.length > MIN.HIT.LENGTH) %>%
-  left_join(protein.similarity.data %>% select(qname, sname, similar.proteins))
+#data.table::fwrite(pairwise.hits.data, file = sprintf("%spairwise.hits.data.txt",OUTPUT.DATA.PATH))
+#rm(table.hhr)
 
 
 #seq.mosaicism.data = table.hhr %>%
@@ -137,14 +151,20 @@ pairwise.hits.data = table.hhr %>%
 #  left_join(protein.similarity.data %>% select(qname, sname, similar.proteins))
 
   
-data.table::fwrite(pairwise.hits.data, file = sprintf("%spairwise.hits.data.txt",OUTPUT.DATA.PATH))
-rm(table.hhr)
 
-#families = data.table::fread(FAMILIES.FILEPATH) %>% select(qname = members, family)
-families.raw = readLines(FAMILIES.RAW.FILEPATH) %>%
-  stringi::stri_split_lines() %>%
-  lapply(FUN = function(x) {unlist(strsplit(x, split = "\t"))})
-names(families.raw) = paste0("fam", 1:length(families.raw))
-families = families.raw %>% stack()
-names(families) = c("qname", "family")
+
+#families.raw = readLines(FAMILIES.RAW.FILEPATH) %>%
+#  stringi::stri_split_lines() %>%
+#  lapply(FUN = function(x) {unlist(strsplit(x, split = "\t"))})
+#names(families.raw) = paste0("fam", 1:length(families.raw))
+#families = families.raw %>% stack()
+#names(families) = c("qname", "family")
+#repr.seq.lengths = data.table::fread(file = sprintf("%sprot-families/representative/repr-seqs-lengths.txt", DATA.PATH))
+#qnames.with.no.family = setdiff(repr.seq.lengths$name, families$qname)
+#families.singletons = data.frame(qname = qnames.with.no.family) %>% mutate(family = paste0("fam", 1+length(families.raw):length(families.raw)+length(qnames.with.no.family)))
+#families = rbind(families, families.singletons)
+
+
+
+families = data.table::fread(FAMILIES.FILEPATH) %>% select(qname = members, family)
 data.table::fwrite(families, file = sprintf("%sfamilies.txt", OUTPUT.DATA.PATH))

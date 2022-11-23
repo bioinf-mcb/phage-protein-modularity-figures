@@ -150,8 +150,7 @@ Get.Ecod.Annotation.Mapping.Numeric = function(distinct_domains, ecod.domain.des
 
 Get.Domain.Positions.Data = function(annotated.ecod.domains) {
   annotated.ecod.domains = annotated.ecod.domains %>% 
-    select(qname, annotation, qlength, qstart, qend, domain, family) %>%
-    arrange(family)
+    select(qname, annotation, qlength, qstart, qend, domain, family)
   tile.data = data.frame(qname = character(0), 
                          pos.start = integer(0), 
                          pos.end = integer(0), 
@@ -193,7 +192,11 @@ Show.Domain.Position.Within.Data = function(tile.data, colormap, my.theme = them
     gg_rect = ggplot() + geom_blank()
   } else {
     tile.data = tile.data %>%
-      mutate(tooltip = paste0("Domain annotation:", domain_name, "\n", "seq: ", qname, "\n", "domain.id: ", domain)) 
+      mutate(tooltip = paste0("Domain annotation:", domain_name, "\n", "seq: ", qname, "\n", "domain.id: ", domain)) %>%
+      arrange(row)
+    
+    tile.data$qname = factor(tile.data$qname, levels = unique(tile.data$qname))
+    tile.data$family = factor(tile.data$family, levels = unique(tile.data$family))
     
     gg_rect = ggplot(tile.data) +
       geom_blank(aes(x=pos.start, y = qname)) +
@@ -235,8 +238,8 @@ Get.Theme= function(text_size = 8, angle.x = 45, angle.y=0, legend.position = "l
 Get.significant.phrog.hits = function(hhr.phrogs, min.prob.threshold, min.scov.threshold, min.qcov.threshold, max.eval.threshold) {
   significant.hhr.phrogs = hhr.phrogs %>%
     filter(prob >= min.prob.threshold,
-           scov >= min.scov.threshold,
-           qcov >= min.qcov.threshold,
+           scov > min.scov.threshold,
+           qcov > min.qcov.threshold,
            eval <= max.eval.threshold)
   return(significant.hhr.phrogs)
 }

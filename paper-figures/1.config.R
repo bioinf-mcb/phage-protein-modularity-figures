@@ -12,24 +12,27 @@ options(stringsAsFactors = F)
 
 
 DROPBOX.PATH =  "/Users/bognasmug/MGG Dropbox/"
-# TO DO: CHANGE THAT WHEN WE HAVE NEW DATA FROM THE CLUSTER
-#FAMILIES.FILEPATH = "/Users/bognasmug/MGG Dropbox/Bogna Smug/Projects/divRBP/phage-pp-workdir-refseq-hhblits/output/prot-families/families/families/dataset-full/family-table.txt"
-FAMILIES.RAW.FILEPATH = "/Users/bognasmug/MGG Dropbox/Projects/divRBP/phage-pp-workdir-refseq-hhblits/output/prot-families/families/dataset-full/mcl/repr-hits-pairwise-prob95-mcl.out"
 # DROPBOX.PATH =  "/Users/rmostowy/MGG Dropbox/"
-# FAMILIES.FILEPATH <- "/Users/rmostowy/MGG Dropbox/Rafal Mostowy/Projects/Data/divRBP-large/families/family-table.txt"
 
+
+# TO DO: CHANGE IT BACK TO MAIN CLUSTER PROJECT ONCE IT IS CORRECT
+FAMILIES.FILEPATH = "/Users/bognasmug/MGG Dropbox/Projects/divRBP/rafals-figures/data/families/family-table.txt"  #"/Users/bognasmug/MGG Dropbox/Bogna Smug/Projects/divRBP/phage-pp-workdir-refseq-hhblits/output/prot-families/families/families/dataset-full/family-table.txt"
+#FAMILIES.RAW.FILEPATH = "~/MGG Dropbox/Projects/divRBP/phage-pp-workdir-refseq-hhblits/output/prot-families/families/dataset-full/mcl/repr-hits-pairwise-prob95-mcl.out"
 
 PROJECT.PATH = sprintf("%s/Projects/divRBP/",DROPBOX.PATH)
 source(sprintf("%spaper-figures/scripts/helpers.R", PROJECT.PATH))
 DATA.PATH = sprintf("%s/phage-pp-workdir-refseq-hhblits/output/", PROJECT.PATH)
-PROFILE.SIMILARITY.TABLE = sprintf("%sprot-families/families/dataset-full/repr-hits-pairwise-prob50.csv", DATA.PATH)
+
+# TO DO: CHANGE IT BACK TO MAIN CLUSTER PROJECT ONCE IT IS CORRECT
+#PROFILE.SIMILARITY.TABLE = sprintf("%sprot-families/families/dataset-full/repr-hits-pairwise-prob50.csv", DATA.PATH)
+PROFILE.SIMILARITY.TABLE = "/Users/bognasmug/MGG Dropbox/Projects/divRBP/rafals-figures/data/families/table_qcov-scov_all.txt"
+REPR.SEQ.LENGTH.FILENAME = sprintf("%sprot-families/representative/repr-seqs-lengths.txt", DATA.PATH)
+
 PHROG.TABLE.PATH = sprintf("%sDatabases/Phrogs/phrog_annot_v4.tsv", DROPBOX.PATH)
 PHROG.HHPRED.HITS.PATH = sprintf("%sprot-families/functional/hhblits-phrogs.txt", DATA.PATH)
 # downloaded from: http://prodata.swmed.edu/ecod/complete/distribution:
 ECOD.DOMAIN.DESCRIPTION.FILEPATH = sprintf("%sDatabases/ECOD/ECOD/ecod.develop283.domains.txt", DROPBOX.PATH)
 MANUAL.PHROG.CLASS.MAPPING = sprintf("%sDatabases/Phrogs/custom/v3beta_phrogs-table-rafal-27_09.xlsx", DROPBOX.PATH) 
-GENE.ONTOLOGY.FILE.PATH =  sprintf("%sDatabases/GeneOntology-org/releases/2021-07-02/go-basic.obo", DROPBOX.PATH)
-GENOME.METADATA.PATH = sprintf("%sDatabases/NCBI/Virus/download_2021-12-03/sequences.csv", DROPBOX.PATH)
 
 # where to output tables and figures
 OUTPUT.DATA.PATH = sprintf("%spaper-figures/tables/", PROJECT.PATH)
@@ -59,22 +62,21 @@ MINIMUM.PROB.FOR.DOMAIN.RELAXED = 70
 MAXIMUM.EVAL.FOR.DOMAIN = 10^(-5)
 MIN.NUM.PROT = 20
 MIN.NUM.PHROG.SEQ.PER.ANNOT = 500
-
+MIN.NUM.FAMILIES.FOR.ECOD.PRESENCE = 2
 
 # f
 MINIMUM.PROB.FOR.PAIRWISE.HIT = 95
 # two same
-MINIMUM.COV.FOR.PROTEIN.SIMILARITY = 0.3
-MIN.HIT.LENGTH = 30
+MINIMUM.COV.FOR.PROTEIN.SIMILARITY = 0.5
+MIN.HIT.LENGTH = 50 #30
 MINIMUM.PIDENT.FOR.PAIRWISE.HIT = 30
 
 #MIN.PERC.PROTEINS.WITH.H.DOMAIN = 20
 
 MIN.NUM.PROT.WITH.2.X.DOMAINS = 10
 MIN.PROB.COND.FOR.AMBIGUOUS.ANNOTATION = 0.3
-MIN.NUM.ECOD.MOSAIC.PAIRS.BETWEEN.FUNCTIONS = 3
-MIN.NUM.ECOD.MOSAIC.PAIR.FAMILIES.BETWEEN.FUNCTIONS = 3
-MIN.NUM.ECOD.MOSAIC.PAIR.FAMILIES.WITHIN.FUNCTIONS = 3
+MIN.NUM.FAMILY.PAIRS.FOR.BETWEEN.FUNCTION.MOSAICISM = 3
+
 SHARED.DOMAIN.LEVEL = "t_id"
 
 FIG.WIDTH = 20
@@ -99,3 +101,23 @@ PHROG.COLOR.MAP = c("integration and excision" = "#FF7F00",
                   "other" = "#999999",
                   "moron, auxiliary metabolic gene and host takeover" = "#F781BF")
 
+phrogs.class.order = c("head and packaging", "connector", "tail", 
+                        "DNA, RNA and nucleotide metabolism", "integration and excision",
+                        "moron, auxiliary metabolic gene and host takeover", "transcription regulation",
+                        "lysis", "other")
+
+phrog.class.labels <- c(
+  'integration and excision' = "integration\nand excision",
+  'head and packaging' = "head and\npackaging",
+  "connector" = "connector",
+  "tail" = "tail",
+  "lysis" = "lysis",
+  'transcription regulation' = "transcription\nregulation",
+  'DNA, RNA and nucleotide metabolism' = "DNA, RNA and\nnucleotide\nmetabolism",
+  "other" = "other",
+  'moron, auxiliary metabolic gene and host takeover' = "moron, auxiliary\nmetabolic gene\nand host takeover"
+)
+
+plotting.thr.fam <- 40
+plotting.thr.ft <- 10
+most.mosaic.annotations = c("DNA primase", "DNA polymerase", "DNA helicase", "endolysin", "tail spike", "tail fiber", "minor tail", "transcriptional regulator")
