@@ -238,8 +238,8 @@ Get.Theme= function(text_size = 8, angle.x = 45, angle.y=0, legend.position = "l
 Get.significant.phrog.hits = function(hhr.phrogs, min.prob.threshold, min.scov.threshold, min.qcov.threshold, max.eval.threshold) {
   significant.hhr.phrogs = hhr.phrogs %>%
     filter(prob >= min.prob.threshold,
-           scov > min.scov.threshold,
-           qcov > min.qcov.threshold,
+           scov >= min.scov.threshold,
+           qcov >= min.qcov.threshold,
            eval <= max.eval.threshold)
   return(significant.hhr.phrogs)
 }

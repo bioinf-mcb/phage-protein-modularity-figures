@@ -17,7 +17,7 @@ DROPBOX.PATH =  "/Users/bognasmug/MGG Dropbox/"
 
 # TO DO: CHANGE IT BACK TO MAIN CLUSTER PROJECT ONCE IT IS CORRECT
 FAMILIES.FILEPATH = "/Users/bognasmug/MGG Dropbox/Projects/divRBP/rafals-figures/data/families/family-table.txt"  #"/Users/bognasmug/MGG Dropbox/Bogna Smug/Projects/divRBP/phage-pp-workdir-refseq-hhblits/output/prot-families/families/families/dataset-full/family-table.txt"
-#FAMILIES.RAW.FILEPATH = "~/MGG Dropbox/Projects/divRBP/phage-pp-workdir-refseq-hhblits/output/prot-families/families/dataset-full/mcl/repr-hits-pairwise-prob95-mcl.out"
+#FAMILIES.RAW.FILEPATH = "/Users/bognasmug/MGG Dropbox/Projects/divRBP/phage-pp-workdir-refseq-hhblits/output/prot-families/families/dataset-full/mcl/repr-hits-pairwise-prob95-mcl.out"
 
 PROJECT.PATH = sprintf("%s/Projects/divRBP/",DROPBOX.PATH)
 source(sprintf("%spaper-figures/scripts/helpers.R", PROJECT.PATH))
@@ -77,10 +77,7 @@ MIN.NUM.PROT.WITH.2.X.DOMAINS = 10
 MIN.PROB.COND.FOR.AMBIGUOUS.ANNOTATION = 0.3
 MIN.NUM.FAMILY.PAIRS.FOR.BETWEEN.FUNCTION.MOSAICISM = 3
 
-SHARED.DOMAIN.LEVEL = "t_id"
-
-FIG.WIDTH = 20
-FIG.HEIGHT = 10
+MIN.PROP.PROTS.WITH.ECOD.HIT = 0.2
 
 theme.no.verical = theme(
   panel.grid.major.x = element_blank(),

@@ -97,9 +97,9 @@ data.table::fwrite(ecod_id_to_names_map, file = sprintf("%secod_id_to_names_map.
 
 
 ecod.domains.hits = ecod.domain.hits.all  %>%
-  left_join(ecod.annotation.map, by = c("domain"))  %>%
+  left_join(ecod.annotation.map, by = c("domain"))  #%>%
   # delete the ones where family is unknown
-  filter(!is.na(f_ind))
+  #filter(!is.na(f_ind))
   
   
 data.table::fwrite(ecod.domains.hits, file = sprintf("%secod.domains.hits.txt",OUTPUT.DATA.PATH))
@@ -121,11 +121,23 @@ protein.similarity.data = protein.similarity.data.raw %>%
 protein.similarity.data[, hit.length := pmin(s.hit.length, q.hit.length)]
 protein.similarity.data[, max.cov := pmax(scov, qcov, na.rm = TRUE)]
 protein.similarity.data[, min.hit.len := pmin(q.hit.length, s.hit.length, na.rm = TRUE)]
-data.table::fwrite(protein.similarity.data, file = sprintf("%sprotein.similarity.data.txt",OUTPUT.DATA.PATH))
 
-#mutate(similar.proteins = 
-#         qcov >= MINIMUM.COV.FOR.PROTEIN.SIMILARITY | 
-#         scov >= MINIMUM.COV.FOR.PROTEIN.SIMILARITY) 
+
+protein.similarity.data = protein.similarity.data %>%
+  mutate(not.similar = max.cov <= MINIMUM.COV.FOR.PROTEIN.SIMILARITY,
+         share.any.fragment = (prob >= MINIMUM.PROB.FOR.PAIRWISE.HIT/100 & 
+                                 min.hit.len >= MIN.HIT.LENGTH)) %>%
+  mutate(share.a.fragment = share.any.fragment & pident >= MINIMUM.PIDENT.FOR.PAIRWISE.HIT/100,
+         share.a.fragment.pident10 = share.any.fragment & pident >= 0.1,
+         share.a.fragment.pident30 = share.any.fragment & pident >= 0.3,
+         share.a.fragment.pident50 = share.any.fragment & pident >= 0.5) %>%
+  mutate(mosaic = share.a.fragment & not.similar,
+         mosaic.pident10 = share.a.fragment.pident10 & not.similar,
+         mosaic.pident30 = share.a.fragment.pident30 & not.similar,
+         mosaic.pident50 = share.a.fragment.pident50 & not.similar)
+
+
+data.table::fwrite(protein.similarity.data, file = sprintf("%sprotein.similarity.data.txt",OUTPUT.DATA.PATH))
 
 hhr.table.filename = sprintf("%s/prot-families/all-by-all/hhblits/table-hhr.txt", DATA.PATH)
 table.hhr = data.table::fread(hhr.table.filename) %>%
