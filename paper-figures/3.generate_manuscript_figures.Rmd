@@ -13,6 +13,11 @@ protein.similarity.data = data.table::fread(file = sprintf("%sprotein.similarity
 
 repr.seq.lengths = data.table::fread(file = sprintf("%sprot-families/representative/repr-seqs-lengths.txt", DATA.PATH))
 ecod.domains.hits = data.table::fread(sprintf("%secod.domains.hits.txt",OUTPUT.DATA.PATH))
+# make sure ecod indexes are characters not numeric
+index.cols = which(names(ecod.domains.hits) %in% c("x_id", "h_id", "t_id", "f_id"))
+ecod.domains.hits[ , (index.cols) := lapply(.SD, as.character), .SDcols = index.cols]
+
+
 hhr.phrogs.annotated = data.table::fread(sprintf("%shhr.phrogs.annotated.txt",OUTPUT.DATA.PATH))
 hhr.phrogs = data.table::fread(sprintf("%shhr.phrogs",OUTPUT.DATA.PATH))
 ecod_id_to_names_map = data.table::fread(sprintf("%secod_id_to_names_map.txt",OUTPUT.DATA.PATH)) %>% as.data.frame()
@@ -52,7 +57,7 @@ names(color.map.df) = c("color", "category")
 
 
 # Fig 1: ANNOTATION UNCERTAINTY
-```{r}
+```{r, eval = FALSE}
 num.proteins = n_distinct(repr.seq.lengths$name)
 
 # NOTE THAT IN FIGURE 1 WE DO NOT RESTRICT OURSELVES TO CATEGORIES THAT ARE BIG ENOUGH
@@ -152,7 +157,7 @@ surely.annotated.ecod.domains = ecod.domains.hits %>%
   select(qname, qstart, qend, qlength, sstart, send, slength, x_id, h_id, t_id, f_id, minimum.prob) %>%
   # note that some families may be unclassified i.e. d_id = NA
   inner_join(surely.annotated.proteins)  %>%  # take the conservatively defined domains onlu
-  inner_join(included.category.sizes, by = c("annotation.index", "annotation", "category", "structural", "annotation.coverage")) 
+  inner_join(included.category.sizes, by = c("annotation.index", "annotation", "category", "structural", "annotation.coverage", "include")) 
 
 surely.annotated.ecod.domains.high.confidence =  surely.annotated.ecod.domains %>%
   filter(minimum.prob == MINIMUM.PROB.FOR.DOMAIN) %>%
@@ -194,19 +199,33 @@ h.domain.occurence.data = surely.annotated.ecod.domains.high.confidence %>%
 data.table::fwrite(h.domain.occurence.data, sprintf("%sFigure2/H_domains.txt", OUTPUT.FIGURES.PATH))
 
 
-ecod.domain.descriptions$h_id <- sapply(1:nrow(ecod.domain.descriptions), function(index){
-  this.topology <- ecod.domain.descriptions$f_id[index]
-  this.topology.h.index <- strsplit(this.topology, ".", fixed = T)[[1]]
-  this.topology.h.index <- this.topology.h.index[-length(this.topology.h.index)]
-  this.topology.h.index <- as.numeric(paste(this.topology.h.index, collapse = "."))
-})
+#ecod.domain.descriptions$h_id <- sapply(1:nrow(ecod.domain.descriptions), function(index){
+#  this.topology <- ecod.domain.descriptions$f_id[index]
+#  this.topology.numbers <- strsplit(this.topology, ".", fixed = T)[[1]]
+#  this.topology.h.index <- this.topology.numbers[1:2] %>% paste(collapse = ".")
+#})
+#
+#ecod.domain.descriptions$t_id <- sapply(1:nrow(ecod.domain.descriptions), function(index){
+#  this.topology <- ecod.domain.descriptions$f_id[index]
+#  this.topology.numbers <- strsplit(this.topology, ".", fixed = T)[[1]]
+#  this.topology.t.index <- this.topology.numbers[1:2:3] %>% paste(collapse = ".")
+#})
 
+
+#num.f.within.h = 
+#ecod.domain.descriptions %>% group_by(h_id) %>% summarise(num_f = n_distinct(f_id), num_t = n_distinct(t_id)) %>%
+#  inner_join(h.domain.occurence.data %>% distinct(h_id, h_name, all.categories)) %>%
+#  distinct(h_name, num_f, num_t, all.categories)
 
 num.f.within.h = 
-ecod.domain.descriptions %>% group_by(h_id) %>% summarise(num_f = n_distinct(f_id), num.t = n_distinct(t_id)) %>%
-  inner_join(h.domain.occurence.data %>% distinct(h_id, h_name, all.categories)) %>%
-  distinct(h_name, num_f, all.categories)
+surely.annotated.ecod.domains.high.confidence  %>% group_by(h_id) %>% summarise(num_f = n_distinct(f_id), num_t = n_distinct(t_id), num_prot = n_distinct(qname)) %>%
+  left_join(h.domain.occurence.data %>% distinct(h_id, h_name, all.categories) %>% mutate(in.ecod.heatmap = TRUE)) %>%
+  distinct(h_name, num_f, num_t, num_prot, all.categories, in.ecod.heatmap)
+
 data.table::fwrite(num.f.within.h, sprintf("%sFigure2/num.f.within.h.txt", OUTPUT.FIGURES.PATH))
+
+
+
 
 
 t.domain.occurence.data.full = surely.annotated.ecod.domains.high.confidence %>% 
@@ -251,65 +270,64 @@ data.table::fwrite(filtered.protein.similarity.data, sprintf("%sFigure3/cov.vs.p
 
 # network of DNA, RNA, and nucleotide metabolism domains
 ```{r}
-nucl.metabolism.domains = surely.annotated.ecod.domains.high.confidence %>%
-  filter(category == "DNA, RNA and nucleotide metabolism") %>%
-  distinct(t_id)
-nucl.metabolism.domain.hits = surely.annotated.ecod.domains.high.confidence %>%
-  inner_join(nucl.metabolism.domains) %>%
-  distinct(qname, t_id)
-nucl.metabolism.domain.network = nucl.metabolism.domain.hits %>%
-  inner_join(nucl.metabolism.domain.hits, by = c("qname")) %>%
-  filter(t_id.x < t_id.y) %>%
-  rowwise() %>%
-  mutate(pair = paste(sort(c(t_id.x, t_id.y)), collapse = " AND ", sep = "")) %>%
-  group_by(t_id.x, t_id.y, pair) %>%
-  summarise(num.prot = n_distinct(qname)) %>%
-  ungroup() %>%
-  select(from = t_id.x, to = t_id.y, num.prot) %>%
-  filter(num.prot >= 5)
+selected_categories = c("DNA, RNA and nucleotide metabolism","tail", "lysis")
+nucl.metabolism.domain.network = data.frame(from = character(0), to = character(0), category = character(0), num.prot = numeric(0))
+
+
+for (selected_category in selected_categories) {
+  nucl.metabolism.domains.in.selected.category = surely.annotated.ecod.domains.high.confidence %>%
+    filter(category == selected_category) %>%
+    distinct(t_id, category)
+  # here we look only at sequences that include a domain from selected category
+  nucl.metabolism.domain.hits = surely.annotated.ecod.domains.high.confidence %>%
+    inner_join(nucl.metabolism.domains.in.selected.category, by = c("t_id", "category")) %>%
+    distinct(qname, t_id, category)
+  # and we see what other doains coexist with these domains
+  nucl.metabolism.domain.network.this.cat = nucl.metabolism.domain.hits %>%
+    inner_join(nucl.metabolism.domain.hits, by = c("qname", "category")) %>%
+    filter(t_id.x < t_id.y) %>%
+    rowwise() %>%
+    mutate(pair = paste(sort(c(t_id.x, t_id.y)), collapse = " AND ", sep = ""),
+           category = selected_category) %>%
+    group_by(t_id.x, t_id.y, pair, category) %>%
+    summarise(num.prot = n_distinct(qname)) %>%
+    ungroup() %>%
+    select(from = t_id.x, to = t_id.y, category, num.prot) %>%
+    filter(num.prot >= 5)
+    nucl.metabolism.domain.network = rbind(nucl.metabolism.domain.network, nucl.metabolism.domain.network.this.cat)
+}
+
+
+
+  domain.annotations = surely.annotated.ecod.domains.high.confidence %>%
+    filter(category %in% selected_categories)  %>%
+    distinct(t_id, annotation, category) %>%
+    group_by(t_id, category) %>%
+    mutate(n = n_distinct(annotation)) %>%
+    arrange(t_id) %>%
+    summarise(annotation = if_else(all(n == 1), annotation[1], "multiple")) %>%
+    left_join(stack(PHROG.COLOR.MAP) %>% select(color = values, category = ind), by = "category") %>%
+    mutate(multi = annotation == "multiple")  %>%
+    mutate(color = if_else(multi, "black", color)) %>%
+    select(node = t_id, category, color)
   
-domain.network.metadata = data.frame(node = unique(c(nucl.metabolism.domain.network$from, nucl.metabolism.domain.network$to))) %>%
-  left_join(ecod_id_to_names_map %>% filter(level == "T") %>% select(node = id, label = name)) %>%
-  mutate(color = "#377EB8") %>%
-  mutate(size = 1)
-
-domain.annotations = surely.annotated.ecod.domains.high.confidence %>%
-  filter(category == "DNA, RNA and nucleotide metabolism")  %>%
-  distinct(t_id, annotation) %>%
-  group_by(t_id) %>%
-  mutate(n = n_distinct(annotation)) %>%
-  arrange(t_id) %>%
-  summarise(annotation = if_else(all(n == 1), annotation[1], "multiple")) %>%
-  mutate(multi = annotation == "multiple")  %>%
-  mutate(color = if_else(multi, "black", "blue"))
-
-annotated.domain.network = Annotate_Graph(nucl.metabolism.domain.network, 
-                  edge.colors = NULL,
-                  node.color.map = domain.annotations %>%
-                                      select(node = t_id, color),
-                  # node these sizes are defined at high threshold
-                  node.size.map = domain.network.metadata %>%
-                                      select(node, size),
-                  node.labels = domain.network.metadata %>% 
-                    select(node, label) %>%
-                    rowwise() %>%
-                    mutate(label = gsub(" ", "\n", label)),
-                  line.color.variable =  "from")
-
-annotated.domain.network.figure = VisualiseGGnetwork(annotated.domain.network, 
-                   cex = 0.1, label_size = 1.5, layout = igraph::nicely(), main = "", 
-                   nudge_y = 0, alpha = 0.3)
-annotated.domain.network.figure
-ggsave(annotated.domain.network.figure, filename = sprintf("%sFigure5/annotated.domain.network.figure.png", OUTPUT.FIGURES.PATH), width = 8, height = 8)
-
+  domain.network.metadata = data.frame(node = unique(c(nucl.metabolism.domain.network$from, nucl.metabolism.domain.network$to))) %>%
+    left_join(ecod_id_to_names_map %>% filter(level == "T") %>% select(node = id, label = name)) %>%
+    mutate(size = 1) %>%
+    left_join(domain.annotations, by = "node")
+  
+data.table::fwrite(domain.network.metadata, sprintf("%sFigure5/domain.network.metadata.txt", OUTPUT.FIGURES.PATH))
+data.table::fwrite(nucl.metabolism.domain.network, sprintf("%sFigure5/nucl.metabolism.domain.network.txt", OUTPUT.FIGURES.PATH))
 
 ```
+
+
 
 # Network of recent HGT
 ```{r}
 recent_HGT_pairs_raw = protein.similarity.data %>%
   #filter(mosaic.pident70) %>%
-  filter(mosaic.pident90) %>%
+  filter(mosaic.pident70) %>%
   select(qname, sname) %>%
   left_join(surely.annotated.proteins.from.included.categories %>% select(qname, qindex = annotation.index)) %>%
   left_join(surely.annotated.proteins.from.included.categories %>% select(sname = qname, sindex = annotation.index)) %>%

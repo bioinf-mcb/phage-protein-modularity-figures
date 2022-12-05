@@ -109,6 +109,37 @@ ggsave(p.figure, filename = sprintf("%sFigure1/Supplementary_Figure1.png", OUTPU
 ```
 
 
+# Domain  network
+```{r}
+domain.network.metadata =   data.table::fread(sprintf("%sFigure5/domain.network.metadata.txt", OUTPUT.FIGURES.PATH))
+nucl.metabolism.domain.network = data.table::fread(sprintf("%sFigure5/nucl.metabolism.domain.network.txt", OUTPUT.FIGURES.PATH))
+
+for (selected_category in unique(domain.network.metadata$category)) {
+  annotated.domain.network = Annotate_Graph(nucl.metabolism.domain.network %>% filter(category == selected_category), 
+                    edge.colors = NULL,
+                    node.color.map = domain.network.metadata %>%
+                      filter(category == selected_category) %>%
+                                        select(node, color),
+                    # node these sizes are defined at high threshold
+                    node.size.map = domain.network.metadata %>%
+                      filter(category == selected_category) %>%
+                                        select(node, size),
+                    node.labels = domain.network.metadata %>% 
+                      filter(category == selected_category) %>%
+                      select(node, label) %>%
+                      rowwise() %>%
+                      mutate(label = gsub(" ", "\n", label)),
+                    line.color.variable =  "from")
+  
+  annotated.domain.network.figure = VisualiseGGnetwork(annotated.domain.network, 
+                     cex = 0.1, label_size = 1.5, layout = igraph::nicely(), main = "", 
+                     nudge_y = 0, alpha = 0.3)
+  annotated.domain.network.figure
+  ggsave(annotated.domain.network.figure, filename = sprintf("%sFigure5/annotated.domain.network.figure_%s.png", OUTPUT.FIGURES.PATH, selected_category), width = 8, height = 8)
+}
+
+
+```
 
 
 ```{r}
@@ -284,9 +315,15 @@ ggplot(h.domain.occurence.data) +
 ggsave(sprintf("%sFigure2/H_domains.jpg", OUTPUT.FIGURES.PATH), width = 9, height = 10)
 
 
-num.f.within.h = data.table::fread(sprintf("%sFigure2/num.f.within.h.txt", OUTPUT.FIGURES.PATH))
-ggplot(num.f.within.h) +
-  geom_col(aes(x = h_name, y = num_f, fill = all.categories)) +
+num.f.within.h = data.table::fread(sprintf("%sFigure2/num.f.within.h.txt", OUTPUT.FIGURES.PATH)) 
+
+num.f.within.h.bars = num.f.within.h %>%
+  filter(in.ecod.heatmap) %>%
+  rename(family = num_f, topology = num_t) %>%
+  tidyr::gather(key = "ECOD level", value = "num.groups", family, topology)
+
+ggplot(num.f.within.h.bars) +
+  geom_col(aes(x = h_name, y = num.groups, fill = all.categories, alpha = `ECOD level`), position = position_dodge2(preserve = "single")) +
     theme(axis.text.x = element_text(angle=45, hjust =1,vjust=1, size = text_size.x),
         axis.text.y = element_text(hjust = 1,vjust=0.5, size = text_size.y),
         strip.text.y = element_text(face = "bold", size = 6, angle = 360),
@@ -295,10 +332,17 @@ ggplot(num.f.within.h) +
              labeller = labeller(all.categories = c(phrog.class.labels2, "multiple categories" = "multiple\ncategories"))) + 
   xlab("") + ylab("Num. of domain families in the group.") +
   guides(fill = "none") +
-  scale_fill_manual(values = PHROG.COLOR.MAP)
+  scale_fill_manual(values = c(PHROG.COLOR.MAP, "multiple categories" = "#000000")) +
+  scale_y_sqrt(breaks = c(1,10,25,50,100,150)) +
+  scale_alpha_manual(values = c("family" = 0.5, "topology" =1))
 ggsave(sprintf("%sFigure2/num.f.within.h.jpg", OUTPUT.FIGURES.PATH), width = 10, height = 7)
 
 
+ggplot(num.f.within.h) +
+  geom_point(aes(x = num_prot, y = num_f)) +
+  scale_x_log10() +
+  scale_y_log10()
+cor.test(num.f.within.h$num_f, num.f.within.h$num_prot, method = "spearman")
 
 t.domain.occurence.data.full = data.table::fread(sprintf("%sFigure2/T_domains.txt", OUTPUT.FIGURES.PATH)) %>%
   as.data.frame() 
@@ -326,6 +370,7 @@ ggsave(sprintf("%sFigure2/T_domains.jpg", OUTPUT.FIGURES.PATH), width = 20, heig
 
 
 ```{r}
+library(RColorBrewer)
 text.size.axis = 6
 text.size.panel = 12
 most.mosaic.classes = c("tail fiber", "endolysin", "DNA polymerase", "major tail")
@@ -366,15 +411,16 @@ most.mosaic.classes = c("tail fiber", "endolysin", "DNA polymerase", "major tail
             domain_name,
             #paste(domain_name, " (X: ", x_name, " [nr  ",x.index ,"]", ")", collapse = "", sep = ""))) %>%
             paste(x.index, ": ", domain_name, collapse = "", sep = ""))) %>%
-          ungroup() %>%
-          rowwise() %>%
-          mutate(domain_new = gsub(" ", "\n", domain_new))
+          ungroup() #%>%
+          #rowwise() %>%
+          #mutate(domain_new = gsub(" ", "\n", domain_new))
         
         
         # create a color pallete where domains from common X are different shades of the same color
         this.x = this.tile.data %>% filter(!(domain %in% c("undetected", 
                                                            "multiple domains"))) %>% distinct(x.index) %>% pull(x.index)
-        x.colors = randomcoloR::distinctColorPalette(length(this.x))
+        #x.colors = randomcoloR::distinctColorPalette(length(this.x))
+        x.colors = mycolors <- colorRampPalette(brewer.pal(8, "Dark2"))(length(this.x))
         x.colors = data.frame(x.index = this.x, color = x.colors)
         all.colors = data.frame(domain = character(0), color = character(0))
         for (this.x.index in this.x) {
@@ -397,7 +443,9 @@ most.mosaic.classes = c("tail fiber", "endolysin", "DNA polymerase", "major tail
         this.tile.data.row.numbers = this.tile.data %>%
           arrange(domain.combination, qname) %>%
           distinct(domain.combination, qname) %>%
-          mutate(row.plus = row_number()) %>%
+          mutate(dummy = 1) %>%
+          group_by(dummy) %>%
+          mutate(row.plus = 1:n()) %>%
           mutate(row = row.plus - 0.5)
         
         this.tile.data = this.tile.data %>%
@@ -412,7 +460,6 @@ most.mosaic.classes = c("tail fiber", "endolysin", "DNA polymerase", "major tail
           #scale_y_discrete(breaks =this.tile.data$qname, labels = this.tile.data$family) +
           
             theme(strip.text.x = element_text(size = text.size.panel), 
-            legend.position = "bottom",
             #legend.box="vertical", legend.margin=margin(),
                 axis.title.x = element_text(size = text.size.axis),
                 axis.title.y = element_text(size = text.size.axis),
@@ -421,7 +468,7 @@ most.mosaic.classes = c("tail fiber", "endolysin", "DNA polymerase", "major tail
                 axis.text.y = element_text(size = text.size.axis)
                 #axis.ticks.x = element_blank(),
                 #axis.ticks.y = element_blank()
-                )
+                ) 
                 
         domain.position.plots[[this.annotation]] =  gg_rect
   }
@@ -608,7 +655,7 @@ p.most.diverse
 p.fig4 <- plot_grid(p.panelab, p.most.diverse, ncol = 1, labels = c("", "C"), label_size = 8, rel_heights = c(0.4, 0.6))
 p.fig4.filename <- sprintf("%sFigure4/Figure4.png", OUTPUT.FIGURES.PATH)
 ggsave(p.fig4.filename, p.fig4, width = 12, height = 10)
-
+ggsave(sprintf("%sFigure4/Figure4.pdf", OUTPUT.FIGURES.PATH), p.fig4, width = 12, height = 10)
 
 ## supplementary version
 # Fig 4c

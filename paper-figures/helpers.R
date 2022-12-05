@@ -221,7 +221,7 @@ Get.Domain.Positions.Data = function(annotated.ecod.domains) {
 }
 
 
-Show.Domain.Position.Within.Data = function(tile.data, colormap, my.theme = theme_bw(), color.frames = FALSE) {
+Show.Domain.Position.Within.Data = function(tile.data, colormap, my.theme = theme_bw(), color.frames = FALSE, legend.position = "bottom") {
   if (nrow(tile.data) == 0) {
     gg_rect = ggplot() + geom_blank()
   } else {
@@ -235,24 +235,24 @@ Show.Domain.Position.Within.Data = function(tile.data, colormap, my.theme = them
     if (color.frames) {
       gg_rect = ggplot(tile.data, aes(color = x_name))
     } else {
-      gg_rect = ggplot(tile.data, aes(color = domain))  +
+      gg_rect0 = ggplot(tile.data, aes(color = domain))  +
         scale_color_manual(values = colormap[which(names(colormap) %in% unique(tile.data$domain))], name = "Domain")
     }
-    gg_rect = gg_rect +   
+    gg_rect = gg_rect0 +   
       geom_blank(aes(x=pos.start, y = qname)) +
       geom_rect_interactive(mapping = aes(xmin = pos.start, xmax = pos.end,
                                           ymin = row, ymax = row.plus, fill = domain,
                                           tooltip = tooltip), alpha=1) +
-      scale_x_continuous(name="position") +
+      scale_x_continuous(name="position", limits = c(0, max(tile.data$pos.end))) +
       ylab("") +
-      xlim(c(0, max(tile.data$pos.end))) +
       # leave in the egend only the colors that we can actually see
       scale_fill_manual(values = colormap[which(names(colormap) %in% unique(tile.data$domain))], name = "Domain") + 
       facet_grid(. ~annotation) + 
       my.theme +
+      theme(legend.position = legend.position) +
       guides(
         color = guide_legend(show = FALSE),
-        fill=guide_legend(ncol = 3,,byrow=FALSE)
+        fill=guide_legend(nrow = 5,byrow=TRUE)
       )
   }
   #guides(fill = "none")
@@ -347,7 +347,7 @@ VisualiseIgraphnetwork = function(data.for.network,
     igraph::E(net_annotated)$weight = 0.1
   }
   if (is.null(node.label.color)) {
-    node.label.color = graph::V(net_annotated)$color
+    node.label.color = igraph::V(net_annotated)$color
   }
   
   p.plot=igraph::plot.igraph(
