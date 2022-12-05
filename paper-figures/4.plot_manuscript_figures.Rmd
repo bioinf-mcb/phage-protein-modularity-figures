@@ -8,6 +8,23 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(cowplot)
+ecod_id_to_names_map = data.table::fread(sprintf("%secod_id_to_names_map.txt",OUTPUT.DATA.PATH)) %>% as.data.frame()
+```
+
+# 
+```{r}
+# PHROG CLASS LEGEND
+dat = stack(PHROG.COLOR.MAP)
+names(dat) = c("values", "Category")
+ggp <- ggplot(dat, aes(x=values, y=values, fill = Category)) +    # Create ggplot2 plot
+  geom_col(size = 5) +
+  scale_fill_manual(values = PHROG.COLOR.MAP, name = "Category")
+
+jpeg(sprintf("%sCategory_Legend.jpg", OUTPUT.FIGURES.PATH),  width = 10, height = 10, units = "cm", res = 300)
+ggp_legend <- cowplot::get_legend(ggp) 
+grid::grid.newpage()                                     # Draw empty plot window
+grid::grid.draw(ggp_legend)  
+dev.off()
 ```
 
 
@@ -17,7 +34,7 @@ col1.uniqueness <- "darkgreen"
 col2.coverage <- "darkred"
 point.size = 3
 line.size = 1
-
+text.size = 12
 annotation.uncertainty.data.vs.cov = data.table::fread(sprintf("%sFigure1/Fig1_Tradeoff_cov.txt", OUTPUT.FIGURES.PATH)) %>% as.data.frame()
 p.a=ggplot(data = annotation.uncertainty.data.vs.cov %>%
           mutate(`probability\nthreshold [%]` = as.factor(minimum.probability),
@@ -28,10 +45,10 @@ p.a=ggplot(data = annotation.uncertainty.data.vs.cov %>%
   geom_line(aes(x = annotation.coverage, y = perc.annotated, linetype = `probability\nthreshold [%]`), col = col2.coverage, size = line.size) + 
   Get.Theme(legend.position = "right") +
   xlab("sequence coverage threshold [%]") +
-  theme( axis.title.y.right = element_text(colour = col2.coverage),
-         axis.text.y.right = element_text(colour = col2.coverage),
-          axis.title.y = element_text(colour = col1.uniqueness),
-         axis.text.y = element_text(colour = col1.uniqueness),
+  theme( axis.title.y.right = element_text(colour = col2.coverage, size = text.size),
+         axis.text.y.right = element_text(colour = col2.coverage, size = text.size),
+          axis.title.y = element_text(colour = col1.uniqueness, size = text.size),
+         axis.text.y = element_text(colour = col1.uniqueness, size = text.size),
            plot.title = element_text(size=14, face="bold", hjust = 0.5)) +
   scale_y_continuous(name = "functional uniqueness \n(% of annotated proteins with hits to a single function)",
                      limits = c(0,101),
@@ -42,6 +59,7 @@ p.a=ggplot(data = annotation.uncertainty.data.vs.cov %>%
 
 annotation.uncertainty.data.vs.prob = data.table::fread(sprintf("%sFigure1/Fig1_Tradeoff_prob.txt", OUTPUT.FIGURES.PATH))
 p.b=ggplot(data = annotation.uncertainty.data.vs.prob %>%
+             filter(annotation.coverage %in% c(0.1, 0.8)) %>%
           mutate(`sequence coverage\nthreshold [%]`  = as.factor(annotation.coverage*100))) +
   geom_point(aes(x = minimum.probability, y = perc.unique.annotation, linetype = `sequence coverage\nthreshold [%]` ), col = col1.uniqueness, size = point.size) + 
   geom_line(aes(x = minimum.probability, y = perc.unique.annotation, linetype = `sequence coverage\nthreshold [%]` ), col = col1.uniqueness, size = line.size) + 
@@ -49,18 +67,19 @@ p.b=ggplot(data = annotation.uncertainty.data.vs.prob %>%
   geom_line(aes(x = minimum.probability, y = perc.annotated, linetype = `sequence coverage\nthreshold [%]` ), col = col2.coverage, size = line.size) + 
   Get.Theme(legend.position = "right") +
   xlab("probability [%]") +
-  theme( axis.title.y.right = element_text(colour = col2.coverage),
-         axis.text.y.right = element_text(colour = col2.coverage),
-          axis.title.y = element_text(colour = col1.uniqueness),
-         axis.text.y = element_text(colour = col1.uniqueness),
+  theme( axis.title.y.right = element_text(colour = col2.coverage, size = text.size),
+         axis.text.y.right = element_text(colour = col2.coverage, size = text.size),
+          axis.title.y = element_text(colour = col1.uniqueness, size = text.size),
+         axis.text.y = element_text(colour = col1.uniqueness, size = text.size),
            plot.title = element_text(size=14, face="bold", hjust = 0.5)) +
   scale_y_continuous(name = "functional uniqueness \n(% of annotated proteins with hits to a single function)",
                      limits = c(0,101),
                      breaks = seq(0,100,10),
                      sec.axis=sec_axis(~.*1,name="functional coverage \n(% proteins with a hit to any known function)")) + 
   labs(title = "Impact of hit probability on functional annotation")
+```
 
-
+```{r, eval = FALSE}
 annotation.uncertainty.data.vs.eval = data.table::fread(sprintf("%sFigure1/Fig1_Tradeoff_eval.txt", OUTPUT.FIGURES.PATH))
 p.c=ggplot(data = annotation.uncertainty.data.vs.eval %>%
           mutate(`sequence coverage\nthreshold [%]`  = as.factor(annotation.coverage*100))) +
@@ -82,33 +101,344 @@ p.c=ggplot(data = annotation.uncertainty.data.vs.eval %>%
   scale_x_log10() + 
   labs(title = "Impact of hit e-value on functional annotation")
 
-
-p.figure <- plot_grid(p.a, p.b, p.c, labels = c("A", "B", "C"), label_size = 25, ncol = 1)
-ggsave(p.figure, filename = sprintf("%sFigure1/Figure1.png", OUTPUT.FIGURES.PATH), width = 10, height = 13.5)
-  
 ```
+
+```{r, eval = TRUE}
+p.figure <- plot_grid(p.a, p.b, labels = c("A", "B"), label_size = 25, ncol = 1)
+ggsave(p.figure, filename = sprintf("%sFigure1/Supplementary_Figure1.png", OUTPUT.FIGURES.PATH), width = 12, height = 10)
+```
+
+
+
+
+```{r}
+
+annotation.netwok.relaxed.threshold = data.table::fread( 
+                   sprintf("%sFigure1/annotation.netwok.relaxed.threshold.txt", OUTPUT.FIGURES.PATH))
+annotation.netwok.default.threshold = data.table::fread( 
+                   sprintf("%sFigure1/annotation.netwok.default.threshold.txt", OUTPUT.FIGURES.PATH))
+annotation.network.metadata = data.table::fread( 
+                   sprintf("%sFigure1/annotation.network.metadata.txt", OUTPUT.FIGURES.PATH)) %>%
+  rowwise() %>%
+  mutate(label = if_else(label == "DNA\npolymerase/primase", "DNA\npolymerase/\nprimase",  gsub("\n", " ", label)))
+
+  
+annotated.annotation.network.relaxed.threshold = Annotate_Graph(annotation.netwok.relaxed.threshold, 
+                  edge.colors = NULL,
+                  node.color.map = annotation.network.metadata%>%
+                                      select(node, color),
+                  # node these sizes are defined at high threshold
+                  node.size.map = annotation.network.metadata %>%
+                                      select(node, size),
+                  node.labels = annotation.network.metadata %>% 
+                    select(node, label),
+                  line.color.variable =  "from")
+annotated.annotation.network.default.threshold = Annotate_Graph(annotation.netwok.default.threshold, 
+                  edge.colors = NULL,
+                  node.color.map = annotation.network.metadata%>%
+                                      select(node, color),
+                  # node these sizes are defined at high threshold
+                  node.size.map = annotation.network.metadata %>%
+                                      select(node, size),
+                  node.labels = annotation.network.metadata %>% 
+                    select(node, label),
+                  line.color.variable =  "from")
+
+
+
+network.relaxed.figure = VisualiseGGnetwork(annotated.annotation.network.relaxed.threshold, 
+                   cex = 0.1, label_size = 2.35, layout = igraph::nicely(), main = "", nudge_y = 0.005, alpha = 0.3) #nudge_y = 0.015,
+network.relaxed.figure
+ggsave(network.relaxed.figure, filename = sprintf("%sFigure1/Relaxed_network.png", OUTPUT.FIGURES.PATH), width = 9, height = 10)
+
+network.default.figure = VisualiseGGnetwork(annotated.annotation.network.default.threshold, 
+                   cex = 0.1, label_size = 2.5, layout = igraph::nicely(), main = "", nudge_y = 0.04, alpha = 0.5)
+network.default.figure
+ggsave(network.default.figure, filename = sprintf("%sFigure1/Default_network.png", OUTPUT.FIGURES.PATH), width = 5, height = 5)
+
+```
+
+```{r}
+recent_HGT_pairs = data.table::fread(sprintf("%sFigure5/recent_HGT_network.txt", OUTPUT.FIGURES.PATH)) %>%
+  select(from, to, num.prot.pairs)
+
+
+
+annotation.network.metadata = data.table::fread( 
+                   sprintf("%sFigure1/annotation.network.metadata.txt", OUTPUT.FIGURES.PATH)) %>%
+  rbind(data.frame(node = 0, color = "#808080", size = 4, label = "unknown"))
+
+  
+annotated.recent_HGT_pairs = Annotate_Graph(recent_HGT_pairs, 
+                  edge.colors = NULL,
+                  node.color.map = annotation.network.metadata%>%
+                                      select(node, color),
+                  # node these sizes are defined at high threshold
+                  node.size.map = annotation.network.metadata %>%
+                                      select(node, size),
+                  node.labels = annotation.network.metadata %>% 
+                    select(node, label),
+                  line.color.variable =  "from")
+
+network.recent.HGT = VisualiseGGnetwork(annotated.recent_HGT_pairs, 
+                   cex = 0.1, 
+                   label_size = 1.5, 
+                   layout = igraph::nicely(), 
+                   main = "", 
+                   nudge_y = 0.04, 
+                   alpha = 0.5, 
+                   remove.loops  = F)
+network.recent.HGT
+ggsave(network.recent.HGT, filename = sprintf("%sFigure5/network_recent_HGT.jpg", OUTPUT.FIGURES.PATH), width = 5, height = 5)
+
+
+jpeg(filename = sprintf("%sFigure5/network_recent_HGT_igraph.jpg", OUTPUT.FIGURES.PATH), width = 15, height = 15, units = "cm", res = 300)
+VisualiseIgraphnetwork(data.for.network = recent_HGT_pairs %>% mutate(weight = log10(num.prot.pairs)/3),
+                      edge.colors = NULL,
+                      node.color.map = annotation.network.metadata%>%
+                                      select(node, color),
+                      # node these sizes are defined at high threshold
+                      node.size.map = annotation.network.metadata %>%
+                                      select(node, size),
+                      node.labels = annotation.network.metadata %>% 
+                    select(node, label),
+                      line.color.variable = "from",
+                      line.color.legend.name = NULL,
+                      font.size = 0.75,
+                      vertex.size = 1,
+                      main = "",
+                      vertex.label.dist = 1,
+                      include.labels = TRUE,
+                      alpha = 0.3)
+dev.off()
+
+```
+
+# Fig 3 network
+```{r}
+mosaic.network = data.table::fread(sprintf("%sFigure3/3a_mosaic.network.txt", OUTPUT.FIGURES.PATH))
+#mosaic.metadata = data.table::fread(sprintf("%sFigure3/3a_mosaic.metadata.txt", OUTPUT.FIGURES.PATH), sep = "\t")
+
+
+
+jpeg(filename = sprintf("%sFigure3/network.jpg", OUTPUT.FIGURES.PATH), width = 10, height = 10, units = "cm", res = 300)
+VisualiseIgraphnetwork(data.for.network = mosaic.network %>% mutate(weight = log10(num.reprseq.any.mossaic)/20) %>% 
+                         select(from = from.index, to = to.index, weight, dataset),
+                      edge.colors = data.frame(value = c("ecod", "seq", "both"), color = c("gray", "gray", "darkred")),
+                      edge.linetypes = data.frame(value = c("ecod", "seq", "both"), lty = c("solid", "dotted", "solid")),
+                      node.color.map = annotation.network.metadata%>%
+                                      select(node, color),
+                      # node these sizes are defined at high threshold
+                      node.size.map = annotation.network.metadata %>%
+                                      select(node, size) %>% mutate(size = 2*size),
+                      node.labels = annotation.network.metadata %>% 
+                    select(node, label),
+                      line.color.variable = "dataset",
+                      line.color.legend.name = "Mosaicism via",
+                      font.size = 0.25,
+                      main = "",
+                      vertex.label.dist = 1,
+                      include.labels = TRUE,
+                      alpha = 1,
+                    label.font = 2,
+                    legend.title = "Mosaicism via:",
+                    node.label.color = "black")
+dev.off()
+```
+
+
+```{r}
+p.figure <- plot_grid(network.default.figure, network.relaxed.figure, labels = c("A", "B"), label_size = 25, ncol = 1, rel_heights = c(0.27, 0.73))
+ggsave(p.figure, filename = sprintf("%sFigure1/Supplementary_Figure2.pdf", OUTPUT.FIGURES.PATH), width =8, height = 12)
+ggsave(p.b, filename = sprintf("%sFigure1/Suppl_Figure1b.png", OUTPUT.FIGURES.PATH), width = 10, height = 5)
+ggsave(network.default.figure, filename = sprintf("%sFigure1/Suppl_Figure1_network.default.figure.png", OUTPUT.FIGURES.PATH), width = 5, height = 5)
+```
+
 
 # Fig 2: heatmap of ECODS found in multiple categories
 ```{r}
 
-text_size.x = 7
-text_size.y = 8
+text_size.x = 9
+text_size.y = 9
 
 h.domain.occurence.data = data.table::fread(sprintf("%sFigure2/H_domains.txt", OUTPUT.FIGURES.PATH)) %>% 
   as.data.frame() 
 h.domain.occurence.data$category <- factor(h.domain.occurence.data$category, levels = phrogs.class.order)
 
+phrog.class.labels2 = phrog.class.labels
+phrog.class.labels2[which(names(phrog.class.labels2) == "head and packaging")] = "head\nand\npack."
+phrog.class.labels2[which(names(phrog.class.labels2) == "DNA, RNA and nucleotide metabolism")] = "DNA, RNA\nand\nnucleotide\nmetabolism"
 ggplot(h.domain.occurence.data) +
-  geom_tile(aes(x=h_name, y = annotation, fill = category)) + 
-  theme(axis.text.x = element_text(angle=45, hjust = 1,vjust=1, size = text_size.x),
-               axis.text.y = element_text(hjust = 1,vjust=0.5, size = text_size.y),
-               strip.text.y = element_text(face = "bold", size = 6, angle = 360)) +
-  facet_grid(category ~., scales = "free", space = "free", labeller = labeller(category = phrog.class.labels)) + xlab("") + ylab("") +
+  geom_tile(aes(x=h_name, y = annotation, fill = category)) + #, hjust = 0, vjust = 0
+  theme(axis.text.x = element_text(angle=45, hjust =1,vjust=1, size = text_size.x),
+        axis.text.y = element_text(hjust = 1,vjust=0.5, size = text_size.y),
+        strip.text.y = element_text(face = "bold", size = 6, angle = 360),
+        strip.text.x = element_text(face = "bold", size = 6, angle = 360)) +
+  facet_grid(category ~all.categories, scales = "free", space = "free", 
+             labeller = labeller(category = phrog.class.labels,
+                                 all.categories = c(phrog.class.labels2, "multiple categories" = "multiple\ncategories"))) + 
+  xlab("") + ylab("") +
   guides(fill = "none") +
   scale_fill_manual(values = PHROG.COLOR.MAP)
 
-ggsave(sprintf("%sFigure2/H_domains.jpg", OUTPUT.FIGURES.PATH), width = 9, height = 9)
+ggsave(sprintf("%sFigure2/H_domains.jpg", OUTPUT.FIGURES.PATH), width = 9, height = 10)
+
+
+num.f.within.h = data.table::fread(sprintf("%sFigure2/num.f.within.h.txt", OUTPUT.FIGURES.PATH))
+ggplot(num.f.within.h) +
+  geom_col(aes(x = h_name, y = num_f, fill = all.categories)) +
+    theme(axis.text.x = element_text(angle=45, hjust =1,vjust=1, size = text_size.x),
+        axis.text.y = element_text(hjust = 1,vjust=0.5, size = text_size.y),
+        strip.text.y = element_text(face = "bold", size = 6, angle = 360),
+        strip.text.x = element_text(face = "bold", size = 6, angle = 360)) +
+  facet_grid(. ~all.categories, scales = "free", space = "free", 
+             labeller = labeller(all.categories = c(phrog.class.labels2, "multiple categories" = "multiple\ncategories"))) + 
+  xlab("") + ylab("Num. of domain families in the group.") +
+  guides(fill = "none") +
+  scale_fill_manual(values = PHROG.COLOR.MAP)
+ggsave(sprintf("%sFigure2/num.f.within.h.jpg", OUTPUT.FIGURES.PATH), width = 10, height = 7)
+
+
+
+t.domain.occurence.data.full = data.table::fread(sprintf("%sFigure2/T_domains.txt", OUTPUT.FIGURES.PATH)) %>%
+  as.data.frame() 
+t.domain.occurence.data.full$category <- factor(t.domain.occurence.data.full$category, levels = phrogs.class.order)
+ggplot(t.domain.occurence.data.full) +
+  geom_tile(aes(y=t_name, x = annotation, fill = category)) + #, hjust = 0, vjust = 0
+  theme(axis.text.x = element_text(angle=45, hjust =1,vjust=1, size = text_size.x),
+        axis.text.y = element_text(hjust = 1,vjust=0.5, size = text_size.y),
+        strip.text.y = element_text(face = "bold", size = 6, angle = 360),
+        strip.text.x = element_text(face = "bold", size = 6, angle = 360)) +
+  facet_grid(all.categories ~category, scales = "free", space = "free", 
+             labeller = labeller(category = phrog.class.labels,
+                                 all.categories = c(phrog.class.labels2, "multiple categories" = "multiple\ncategories"))) + 
+  xlab("") + ylab("") +
+  guides(fill = "none") +
+  scale_fill_manual(values = PHROG.COLOR.MAP)
+ggsave(sprintf("%sFigure2/T_domains.jpg", OUTPUT.FIGURES.PATH), width = 20, height = 20)
+
+
 ```
+
+
+
+
+
+
+```{r}
+text.size.axis = 6
+text.size.panel = 12
+most.mosaic.classes = c("tail fiber", "endolysin", "DNA polymerase", "major tail")
+
+
+  domain.position.plots = list()
+  tile.data = data.table::fread(sprintf("%sFigure5/domain.positions.txt", OUTPUT.FIGURES.PATH)) %>%
+    filter(domain.level == "T" & annotation %in% most.mosaic.classes) %>%
+              # keep only the ones with multidomain
+    group_by(qname) %>%
+    mutate(num.domains = n_distinct(domain[domain != "undetected"])) %>%
+    ungroup() %>%
+    filter(num.domains > 1)
+
+  
+  
+        
+      for (this.annotation in unique(tile.data$annotation)) {
+        this.tile.data = tile.data %>% 
+          filter(annotation == this.annotation)  %>% 
+          mutate(annotation = this.annotation) %>%
+          arrange(row) %>%
+          mutate(domain = domain_name) %>%
+          group_by(qname) %>%
+          arrange(pos.start, pos.end) %>% 
+          mutate(domain.combination = paste(unique(domain), collapse = " | ", sep = "")) %>%
+          ungroup() %>%
+          arrange(qname) %>%
+          # select only one qname per domain combination
+          group_by(domain.combination) %>%
+          arrange(pos.start) %>%
+          mutate(qname1 = qname[1]) %>%
+          ungroup() %>%
+          filter(qname == qname1) %>%
+          rowwise() %>%
+          mutate(domain_new = if_else(
+            domain_name == "undetected" | domain_name == "multiple domains",
+            domain_name,
+            #paste(domain_name, " (X: ", x_name, " [nr  ",x.index ,"]", ")", collapse = "", sep = ""))) %>%
+            paste(x.index, ": ", domain_name, collapse = "", sep = ""))) %>%
+          ungroup() %>%
+          rowwise() %>%
+          mutate(domain_new = gsub(" ", "\n", domain_new))
+        
+        
+        # create a color pallete where domains from common X are different shades of the same color
+        this.x = this.tile.data %>% filter(!(domain %in% c("undetected", 
+                                                           "multiple domains"))) %>% distinct(x.index) %>% pull(x.index)
+        x.colors = randomcoloR::distinctColorPalette(length(this.x))
+        x.colors = data.frame(x.index = this.x, color = x.colors)
+        all.colors = data.frame(domain = character(0), color = character(0))
+        for (this.x.index in this.x) {
+          all.domains = this.tile.data %>% filter(x.index == this.x.index) %>% distinct(domain_new) %>% 
+            pull(domain_new)
+          this.color = x.colors %>% filter(x.index == this.x.index) %>% pull(color)
+          this.x.colors.pallete =  colorRampPalette(this.color)
+          this.colors = this.x.colors.pallete(length(all.domains))
+          all.colors = rbind(all.colors, data.frame(domain = all.domains, color = this.colors))
+          print(length(all.domains))
+        }
+                
+        all.colors = rbind(all.colors, data.frame(domain = c("undetected", "multiple domains"), 
+                                                  color = c( "#FFFFFF",  "#000000"), stringsAsFactors = FALSE))
+
+        colm = all.colors$color
+        names(colm) = all.colors$domain
+
+        
+        this.tile.data.row.numbers = this.tile.data %>%
+          arrange(domain.combination, qname) %>%
+          distinct(domain.combination, qname) %>%
+          mutate(row.plus = row_number()) %>%
+          mutate(row = row.plus - 0.5)
+        
+        this.tile.data = this.tile.data %>%
+          select(-row, -row.plus) %>%
+          left_join(this.tile.data.row.numbers)
+        
+        gg_rect = Show.Domain.Position.Within.Data(
+          tile.data = this.tile.data %>% select(-domain) %>% rename(domain = domain_new),
+          colormap = colm, 
+          my.theme = theme.no.verical, 
+          color.frames = FALSE) +
+          #scale_y_discrete(breaks =this.tile.data$qname, labels = this.tile.data$family) +
+          
+            theme(strip.text.x = element_text(size = text.size.panel), 
+            legend.position = "bottom",
+            #legend.box="vertical", legend.margin=margin(),
+                axis.title.x = element_text(size = text.size.axis),
+                axis.title.y = element_text(size = text.size.axis),
+                #axis.text.x = element_blank(),
+                #axis.text.y = element_blank(),
+                axis.text.y = element_text(size = text.size.axis)
+                #axis.ticks.x = element_blank(),
+                #axis.ticks.y = element_blank()
+                )
+                
+        domain.position.plots[[this.annotation]] =  gg_rect
+  }
+  
+
+  
+      
+      
+library(gridExtra)
+          pdf(sprintf("%sFigure5/domain.positions_most_mosaic.pdf", OUTPUT.FIGURES.PATH), 
+         width = 15,
+         height = 25)
+do.call("grid.arrange", c(domain.position.plots, ncol=1))
+dev.off()
+```
+
+
 
 
 # Fig5: SHINY PLOTS
@@ -233,7 +563,7 @@ Fig4b = ggplot(diversity.ok.ecod) +
   #ggrepel::geom_label_repel(aes(x = num.proteins, y = num.topology.combinations, colour = category, label = label), size = 3) + 
   ggrepel::geom_label_repel(aes(x = num.families, y = num.topology.combinations, colour = category, label = label), size = 3) + 
   scale_colour_manual(values = PHROG.COLOR.MAP) + 
-  labs(x = "Number of representative proteins", y = "Number of fold combinations") + 
+  labs(x = "Number of families", y = "Number of fold combinations") + 
   guides(colour = "none") + theme_minimal()
 
 p.panelab <- plot_grid(Fig4a, Fig4b, labels = c("A", "B"), label_size = 8, ncol = 2, rel_widths  = c(1,2))
@@ -378,10 +708,31 @@ functions.low.cov=ggplot(data=table.unknown.seq.functions, aes(x=annotation, y=f
   coord_flip() 
 functions.low.cov
 ggsave(filename = sprintf("%sFigure3/low.cov.funct.all.proteins_old.jpg", OUTPUT.FIGURES.PATH) , functions.low.cov, width = 15, height = 6)
+```
+
+```{r, fig.height =5, fig.width =10}
+annot.stats.per.category.and.mosaicism = data.table::fread(file = sprintf("%sFigure3/unknown_functions_mosaic_vs_nonmosaic.txt", OUTPUT.FIGURES.PATH)) %>%
+  arrange(category, annotation)
 
 
- 
-annot.stats.per.category.and.mosaicism = data.table::fread(file = sprintf("%sFigure3/unknown_functions_mosaic_vs_nonmosaic.txt", OUTPUT.FIGURES.PATH))
+p.annot.low.cov = ggplot(annot.stats.per.category.and.mosaicism %>%
+                           filter(!is.na(category) & category != "") %>%
+  mutate(mosaic = if_else(mosaic, "Mosaic", "Not mosaic")) %>% as.data.frame()) +
+  geom_col(aes(x=annotation, y = prop.proteins.has.this.annot, fill = category, alpha = mosaic), position = position_dodge2(preserve = "single") ) +
+  facet_grid(.~category, scales = "free", space = "free_x", labeller = labeller(category = phrog.class.labels)) +
+  scale_alpha_manual(values = c("Mosaic" = 1, "Not mosaic" = 0.4)) +
+  scale_fill_manual(values = PHROG.COLOR.MAP) +
+  theme(axis.text.x = element_text(angle=45, size = 8, vjust = 1, hjust = 1),
+        axis.text.y = element_text(size = 9)) +
+  guides(fill = "none") + 
+  theme(legend.text=element_text(size=4)) + 
+  labs(x = "", y = "Proportion of proteins with this annotation") 
+ggsave(filename = sprintf("%sFigure3/annotations.at.low.cov.jpg", 
+                          OUTPUT.FIGURES.PATH) ,p.annot.low.cov , width = 15, height = 12)
+
+
+
+
 
 annots.within.proteins.with.significant.higher.mosaic = annot.stats.per.category.and.mosaicism %>%
    filter(corrected.pval < 0.05 & odds.ratio > 1) %>%
@@ -401,6 +752,20 @@ ss=annot.stats.per.category.and.mosaicism %>%
   
 ss$mosaic = factor(ss$mosaic, levels = c("Not mosaic", "Mosaic"))
 ss$annotation = factor(ss$annotation, levels = unique(ss %>% arrange((odds.ratio)) %>% pull(annotation)))
+
+p.odds.low.cov = ggplot(ss  %>% distinct(annotation, category, odds.ratio), 
+                        aes(x=annotation, y = odds.ratio, fill = category)) +
+  geom_bar(stat="identity", width = 0.8) + 
+  scale_fill_manual(values = PHROG.COLOR.MAP) +
+  theme_minimal() + 
+  #guides(fill = "none") + 
+  theme(legend.text=element_text(size=8)) + 
+  labs(x = "", y = "Odds ratio", fill = "category") + 
+  coord_flip() 
+p.odds.low.cov
+ggsave(filename = sprintf("%sFigure3/low.cov.odds.ratio.jpg", OUTPUT.FIGURES.PATH) ,p.odds.low.cov , width = 10, height = 7)
+
+
 p.low.cov = ggplot(ss, aes(x=annotation, y = prop.proteins.has.this.annot, alpha = mosaic, fill = category)) +
   geom_bar(stat="identity", position = position_dodge2(width = 0.8, preserve = "single"), col = "black") + 
   scale_fill_manual(values = PHROG.COLOR.MAP) +
@@ -441,16 +806,16 @@ display.t.name <- sprintf("%s\n(H: %s)", ecod.table$t_name, display.h.name)
 
 getPalette <- colorRampPalette(RColorBrewer::brewer.pal(9, "Set1"))
 no.hom <- length(unique(ecod.table$h_name))
-p <- ggplot(data=ecod.table, aes(x=t_name, y=prop.protein.pairs, fill=h_name)) + 
-  geom_bar(stat="identity", position = position_dodge2(width = 0.9, preserve = "single"), alpha = 1, color="black")
-p <- p + scale_fill_manual(values = getPalette(no.hom)) + scale_color_manual(values = getPalette(no.hom))
-p <- p + scale_x_discrete(breaks = ecod.table$t_name, labels = display.t.name)
-p <- p + theme_minimal() + theme(legend.text=element_text(size=6))
-p <- p + labs(x = "", y = "Proportion of representative proteins pairs")
-p <- p + guides(fill = "none", color = "none") 
-p.shared.ecods <- p + coord_flip()
-p.shared.ecods
+p.shared.ecods <- ggplot(data=ecod.table, aes(x=t_name, y=prop.protein.pairs, fill=h_name)) + 
+  geom_bar(stat="identity", position = position_dodge2(width = 0.9, preserve = "single"),
+           alpha = 1, color="black") +#, fill = "gray90") +
+  scale_x_discrete(breaks = ecod.table$t_name, labels = display.t.name) +
+  theme_minimal() + theme(legend.text=element_text(size=6)) +
+  labs(x = "", y = "Proportion of representative proteins pairs") + 
+  guides(fill = "none", color = "none") + 
+  coord_flip()
 
+p.shared.ecods
 #p.panelc <- plot_grid(p.seq, p.ecod, labels = c("C", "D"), label_size = 25, ncol = 2)
 ggsave(filename = sprintf("%sFigure3/folds_shared_by_mosaic_proteins.jpg", OUTPUT.FIGURES.PATH), p.shared.ecods, width = 12, height = 6)
 
@@ -493,10 +858,10 @@ display.t.name <- sprintf("%s\n(H: %s)", ecod.table$t_name, display.h.name)
 
 getPalette <- colorRampPalette(RColorBrewer::brewer.pal(9, "Set1"))
 no.hom <- length(unique(ecod.table$h_name))
-p <- ggplot(data=ecod.table, aes(x=t_name, y=freq.q, fill=h_name, alpha = mosaic)) + 
+p <- ggplot(data=ecod.table, aes(x=t_name, y=freq.q, alpha = mosaic)) + #fill=h_name, 
   geom_bar(stat="identity", position = position_dodge2(width = 0.9, preserve = "single"), col = "black")
-p <- p + scale_fill_manual(values = getPalette(no.hom)) +
-  scale_color_manual(values = getPalette(no.hom))
+#p <- p + scale_fill_manual(values = getPalette(no.hom)) +
+#  scale_color_manual(values = getPalette(no.hom))
 p <- p + scale_x_discrete(breaks = ecod.table$t_name, labels = display.t.name)
 p <- p + theme_minimal() + theme(legend.text=element_text(size=4))
 p <- p + labs(x = "", y = "Proportion of representative proteins")
@@ -507,6 +872,18 @@ p.domains
 
 #p.panelc <- plot_grid(p.seq, p.ecod, labels = c("C", "D"), label_size = 25, ncol = 2)
 ggsave(filename = sprintf("%sFigure3/folds_within_mosaic_proteins.jpg", OUTPUT.FIGURES.PATH), p.domains, width = 12, height = 12)
+
+
+p.odds = ggplot(ecod.table %>% distinct(t_name, odds.ratio), aes(x=t_name, y = odds.ratio)) +
+  geom_bar(stat="identity", width = 0.8, fill = "gray90", col = "black") + 
+  scale_x_discrete(breaks = ecod.table$t_name, labels = display.t.name) +
+  theme_minimal() + 
+  guides(fill = "none") + 
+  theme(legend.text=element_text(size=4)) + 
+  labs(x = "", y = "Odds ratio", fill = "category") + 
+  coord_flip() 
+p.odds
+ggsave(filename = sprintf("%sFigure3/folds_within_mosaic_proteins.odds.ratio.jpg", OUTPUT.FIGURES.PATH) ,p.odds , width = 15, height = 12)
 ```
 
 
@@ -517,14 +894,22 @@ ggsave(filename = sprintf("%sFigure3/folds_within_mosaic_proteins.jpg", OUTPUT.F
 ```{r} 
 annotated.hhr.table = data.table::fread(sprintf("%sFigure3/cov.vs.pident.txt", OUTPUT.FIGURES.PATH))
 spectral.scale = rev(RColorBrewer::brewer.pal(11, "Spectral"))
-fig3a = ggplot(annotated.hhr.table, aes(x=pident, y=max.cov)) + 
-  stat_binhex(bins = 50) + 
+fig3a = ggplot() + 
+  stat_binhex(data = annotated.hhr.table, bins = 50, aes(x=pident, y=max.cov)) + 
+  geom_rect(aes(xmin = MINIMUM.PIDENT.FOR.PAIRWISE.HIT/100, xmax = 1, 
+            ymin = 0, ymax = MINIMUM.COV.FOR.PROTEIN.SIMILARITY, 
+            color = "red"), fill = NA, size = 2) + guides(color = "none") +
+  geom_text(aes(x = mean(c(MINIMUM.PIDENT.FOR.PAIRWISE.HIT/100, 1)), 
+                y = mean(c(0, MINIMUM.COV.FOR.PROTEIN.SIMILARITY)), 
+                label = "Mosaic\n pairs", col = "red")) +
   scale_fill_gradientn(colours = spectral.scale) + 
   scale_x_continuous(limits = c(0,1)) + 
   scale_y_continuous(limits = c(0,1)) + 
   theme_bw() + 
   labs(x = "Percentage identity", y = "Pairwise sequence coverage", fill = "no. pairs")
+fig3a
 ggsave(sprintf("%s/Figure3/panelA_pairwise-seq.png", OUTPUT.FIGURES.PATH), fig3a,  width = 5, height = 4)
+  
 ```
 
 #join fig 3 panels
@@ -534,6 +919,8 @@ ggsave(sprintf("%s/Figure3/panelAB.pdf", OUTPUT.FIGURES.PATH), fig3ab,  width = 
 fig3de = plot_grid(p.domains, p.low.cov, labels = c("D", "E"), label_size = 25, ncol = 2,rel_widths = c(0.5, 0.5))
 ggsave(sprintf("%s/Figure3/panelDE.pdf", OUTPUT.FIGURES.PATH), fig3de,  width = 15, height = 6)
 
+fig3bc = plot_grid(p.odds, p.odds.low.cov, labels = c("B", "C"), label_size = 25, ncol = 2,rel_widths = c(0.4, 0.6))
+ggsave(sprintf("%s/Figure3/panelBC.pdf", OUTPUT.FIGURES.PATH), fig3bc,  width = 15, height = 6)
 
 ```
 

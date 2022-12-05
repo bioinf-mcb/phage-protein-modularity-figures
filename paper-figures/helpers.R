@@ -26,13 +26,19 @@ Get.ecod.domain.id.From.ECOD.subject.id = function(subject.id) {
 }
 
 Annotate_Graph = function(data.for.network, 
-                               edge.colors,
+                               edge.colors = NULL,
+                               edge.linetypes = NULL,
                                node.color.map,
                                node.size.map = NULL,
+                               node.labels = NULL,
                                line.color.variable,
-                               vertex.size = 1) {
+                               vertex.size = 1, 
+                               remove.loops = TRUE) {
   if (is.null(node.size.map)) {
     node.size.map = data.frame(node = unique(c(data.for.network$from, data.for.network$to))) %>% mutate(size =vertex.size)
+  }
+  if (is.null(node.labels)) {
+    node.labels = data.frame(node = unique(c(data.for.network$from, data.for.network$to))) %>% mutate(label = node)
   }
   label.color.map = node.color.map
   data.for.network$edge.var =  data.for.network %>% pull(line.color.variable)
@@ -42,7 +48,7 @@ Annotate_Graph = function(data.for.network,
   
   net_hh = igraph::simplify(net_hh,
                               remove.multiple = TRUE,
-                              remove.loops = TRUE)
+                              remove.loops = remove.loops)
     
     df_edges_simpliied <- igraph::as_data_frame(net_hh, what = "edges")
     df_edges <- df_edges_simpliied %>% 
@@ -73,13 +79,26 @@ Annotate_Graph = function(data.for.network,
   #net_annotated = net_annotated %>% igraph::simplify()
   if (is.null(edge.colors)) {
     igraph::E(net_annotated)$edge.color = "gray"
-    igraph::E(net_annotated)$lty = "solid"
   } else {
     for (i in 1:nrow(edge.colors)) {
       igraph::E(net_annotated)$edge.color[igraph::E(net_annotated)$edge.var == edge.colors$value[i]] <- edge.colors$color[i]
-      igraph::E(net_annotated)$lty[igraph::E(net_annotated)$edge.var == edge.colors$value[i]] <- edge.colors$lty[i]
     }
   }
+  
+  if (is.null(edge.linetypes)) {
+    igraph::E(net_annotated)$lty = "solid"
+  } else {
+    for (i in 1:nrow(edge.linetypes)) {
+      igraph::E(net_annotated)$lty[igraph::E(net_annotated)$edge.var == edge.linetypes$value[i]] <- edge.linetypes$lty[i]
+    }
+  }
+  #net_annotated = net_annotated %>% igraph::simplify()
+    for (this.label in unique(node.labels$label)) {
+      seqs = node.labels %>% filter(label == this.label) %>% distinct(node) %>% pull(node)
+      vertex = nodes[names(nodes)  %in% seqs]
+      net_annotated = net_annotated %>%
+        igraph::set_vertex_attr("label.name", index = vertex, this.label)
+    }
   return(net_annotated)
 }
 
@@ -88,10 +107,22 @@ Annotate_Graph = function(data.for.network,
 #' We need to first convert our network to a data.frame using ggnetwork package
 #' @net_annotated network with annotation attribute
 #' @colors a mapping of annotations and colors
-VisualiseGGnetwork = function(net_annotated, vertex.size = 0.5, cex = 0.1, label_size = 1, layout = igraph::nicely(), main = "") {
-  data = ggnetwork(x = igraph::simplify(net_annotated, remove.multiple = T, remove.loops = T), 
+VisualiseGGnetwork = function(net_annotated, vertex.size = 0.5, cex = 0.1, 
+                              label_size = 1, 
+                              layout = igraph::nicely(), 
+                              main = "", 
+                              nudge_y = 0.025, 
+                              alpha = 1,
+                              remove.loops = T,
+                              simplify.net = TRUE) {
+  
+  if (simplify.net == TRUE) {
+  data = ggnetwork(x = igraph::simplify(net_annotated, remove.multiple = T, remove.loops = remove.loops), 
                    layout = layout,
-                   scale = TRUE, stringsAsFactors = FALSE, arrow.gap = 0)
+                   scale = TRUE, 
+                   stringsAsFactors = FALSE, 
+                   arrow.gap = 0)
+  }
   
   
   if (!("size" %in% names(data))) {
@@ -100,11 +131,14 @@ VisualiseGGnetwork = function(net_annotated, vertex.size = 0.5, cex = 0.1, label
   if (!("color" %in% names(data))) {
     data$color = "gray"
   }
+  if(!("label.name" %in% names(data))) {
+    data$label.name = data$name
+  }
   
   g=ggplot(data) +
     geom_edges(aes(x = x, y = y, xend=xend, yend=yend), color = "grey50", size = cex) +
-    geom_nodes(aes(x = x, y = y, color = color, label1 = name, size = size)) +
-    geom_text(aes(x = x, y = y, color = color, label = name), size = label_size, nudge_y = 0.025) +
+    geom_nodes(aes(x = x, y = y, color = color, label1 = label.name, size = size), alpha = alpha) +
+    geom_text(aes(x = x, y = y, color = color, label = label.name), size = label_size, nudge_y = nudge_y) +
     guides(size = "none") +
     scale_color_identity() +
     xlim(c(-0.05, 1.05)) +
@@ -187,7 +221,7 @@ Get.Domain.Positions.Data = function(annotated.ecod.domains) {
 }
 
 
-Show.Domain.Position.Within.Data = function(tile.data, colormap, my.theme = theme_bw()) {
+Show.Domain.Position.Within.Data = function(tile.data, colormap, my.theme = theme_bw(), color.frames = FALSE) {
   if (nrow(tile.data) == 0) {
     gg_rect = ggplot() + geom_blank()
   } else {
@@ -198,20 +232,27 @@ Show.Domain.Position.Within.Data = function(tile.data, colormap, my.theme = them
     tile.data$qname = factor(tile.data$qname, levels = unique(tile.data$qname))
     tile.data$family = factor(tile.data$family, levels = unique(tile.data$family))
     
-    gg_rect = ggplot(tile.data) +
+    if (color.frames) {
+      gg_rect = ggplot(tile.data, aes(color = x_name))
+    } else {
+      gg_rect = ggplot(tile.data, aes(color = domain))  +
+        scale_color_manual(values = colormap[which(names(colormap) %in% unique(tile.data$domain))], name = "Domain")
+    }
+    gg_rect = gg_rect +   
       geom_blank(aes(x=pos.start, y = qname)) +
+      geom_rect_interactive(mapping = aes(xmin = pos.start, xmax = pos.end,
+                                          ymin = row, ymax = row.plus, fill = domain,
+                                          tooltip = tooltip), alpha=1) +
       scale_x_continuous(name="position") +
       ylab("") +
-      geom_rect_interactive(mapping = aes(xmin = pos.start, xmax = pos.end,
-                                          ymin = row, ymax = row.plus, fill = domain, color=domain,
-                                          tooltip = tooltip), alpha=1) +
+      xlim(c(0, max(tile.data$pos.end))) +
       # leave in the egend only the colors that we can actually see
       scale_fill_manual(values = colormap[which(names(colormap) %in% unique(tile.data$domain))], name = "Domain") + 
-      scale_color_manual(values = colormap[which(names(colormap) %in% unique(tile.data$domain))], name = "Domain")  +
       facet_grid(. ~annotation) + 
       my.theme +
       guides(
-        color = guide_legend(show = FALSE) 
+        color = guide_legend(show = FALSE),
+        fill=guide_legend(ncol = 3,,byrow=FALSE)
       )
   }
   #guides(fill = "none")
@@ -266,4 +307,83 @@ Calculate.Annotation.Tradeoff = function(hhr.phrogs.annotated, max.eval.range, m
   return(annotation.uncertainty.data)
 }
 
-
+VisualiseIgraphnetwork = function(data.for.network, 
+                               edge.colors,
+                               node.color.map,
+                               node.size.map = NULL,
+                               node.labels,
+                               edge.linetypes = NULL,
+                               line.color.variable,
+                               line.color.legend.name,
+                               font.size = 1,
+                               vertex.size = 1,
+                               add.legend = TRUE,
+                               main = "",
+                               vertex.label.dist = 0.6,
+                               include.labels = TRUE, 
+                               remove.loops = FALSE,
+                               alpha = 1,
+                               label.font = 1, 
+                               legend.title = NULL,
+                               node.label.color = NULL) {  
+  
+    
+  net_annotated =  Annotate_Graph(data.for.network, 
+                                       edge.colors = edge.colors,
+                                       edge.linetypes = edge.linetypes,   
+                                       node.color.map = node.color.map,
+                                       node.size.map = node.size.map,
+                                       node.labels = node.labels,
+                                       line.color.variable = line.color.variable,
+                                       vertex.size = vertex.size,
+                                       remove.loops = remove.loops)
+  if (include.labels) {
+    vertex.label = igraph::vertex_attr(net_annotated, "name")
+  } else {
+    vertex.label = NA 
+  }
+  
+  if (is.null(igraph::E(net_annotated)$weight)) {
+    igraph::E(net_annotated)$weight = 0.1
+  }
+  if (is.null(node.label.color)) {
+    node.label.color = graph::V(net_annotated)$color
+  }
+  
+  p.plot=igraph::plot.igraph(
+    net_annotated,
+    labels = igraph::vertex_attr(net_annotated, "name"),
+    vertex.label = igraph::V(net_annotated)$label.name,
+    #igraph::vertex_attr(net_annotated, "label"),
+    vertex.label.cex = font.size,
+    vertex.label.font = 1,
+    vertex.label.dist = vertex.label.dist,
+    vertex.label.color = node.label.color,
+    vertex.frame.color = adjustcolor(igraph::V(net_annotated)$color,alpha.f = alpha),
+    vertex.color = adjustcolor(igraph::V(net_annotated)$color,alpha.f = alpha),
+    vertex.edge.color =  igraph::V(net_annotated)$color,
+    vertex.size =  igraph::V(net_annotated)$size, 
+    arrow.size = 0.2, 
+    edge.arrow.size = 0,
+    main = main,
+    layout =  igraph::layout_nicely,
+    edge.width = 10*igraph::E(net_annotated)$weight,
+    edge.color = igraph::E(net_annotated)$edge.color,
+    edge.lty = igraph::E(net_annotated)$lty,
+    cex.main=5,
+    label.font = label.font
+    #edge.curved = igraph::curve_multiple(net_annotated, .2)
+  )
+  if (!is.null(edge.colors) & add.legend) {
+    edges = inner_join(edge.linetypes, edge.colors, by = "value")
+    legend(1,1,
+           title = legend.title, 
+           col = edges$color,
+           lty = edges$lty,
+           #legend = paste0(line.color.legend.name," = ", edge.colors$value),
+           legend = edges$value,
+           text.font = 1,
+           cex = font.size)
+  }
+  return(p.plot)
+}

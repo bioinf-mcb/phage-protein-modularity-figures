@@ -21,7 +21,7 @@ FAMILIES.FILEPATH = "/Users/bognasmug/MGG Dropbox/Projects/divRBP/rafals-figures
 #FAMILIES.RAW.FILEPATH = "/Users/bognasmug/MGG Dropbox/Projects/divRBP/phage-pp-workdir-refseq-hhblits/output/prot-families/families/dataset-full/mcl/repr-hits-pairwise-prob95-mcl.out"
 
 PROJECT.PATH = sprintf("%s/Projects/divRBP/",DROPBOX.PATH)
-source(sprintf("%spaper-figures/scripts/helpers.R", PROJECT.PATH))
+source(sprintf("%scode/protein-mosaicism/paper-figures/helpers.R", PROJECT.PATH))
 DATA.PATH = sprintf("%s/phage-pp-workdir-refseq-hhblits/output/", PROJECT.PATH)
 
 # TO DO: CHANGE IT BACK TO MAIN CLUSTER PROJECT ONCE IT IS CORRECT
@@ -53,9 +53,10 @@ DEFAULT.NINIMUM.COV.FOR.ANNOTATION = 0.8
 DEFAULT.MINIMUM.PROB.FOR.ANNOTATION = 95
 DEFAULT.NAXIMUM.EVAL.FOR.ANNOTATION = 10^5
 MAIN.PROBS.FOR.ANNOTATION = c(50, 95)
-MAIN.COVS.FOR.ANNOTATION = c(0.1, 0.8)
+MAIN.COVS.FOR.ANNOTATION = c(0.1, 0.3, 0.8)
 
 
+MIN.NUM.SHARED.SEQ.FOR.SHARED.ANNOT.GRAPH = 20
 
 NINIMUM.QCOV.FOR.DOMAIN = 0
 NINIMUM.SCOV.FOR.DOMAIN = 0.7
@@ -109,14 +110,14 @@ phrogs.class.order = c("head and packaging", "connector", "tail",
 
 phrog.class.labels <- c(
   'integration and excision' = "integration\nand excision",
-  'head and packaging' = "head and\npackaging",
+  'head and packaging' = "head\nand\npackaging",
   "connector" = "connector",
   "tail" = "tail",
   "lysis" = "lysis",
   'transcription regulation' = "transcription\nregulation",
   'DNA, RNA and nucleotide metabolism' = "DNA, RNA and\nnucleotide\nmetabolism",
   "other" = "other",
-  'moron, auxiliary metabolic gene and host takeover' = "moron, auxiliary\nmetabolic gene\nand host takeover"
+  'moron, auxiliary metabolic gene and host takeover' = "metabolic"#"moron, auxiliary\nmetabolic gene\nand host takeover"
 )
 
 plotting.thr.fam <- 40

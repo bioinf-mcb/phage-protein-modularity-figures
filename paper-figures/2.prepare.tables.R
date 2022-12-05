@@ -43,7 +43,8 @@ for (this.cov in MAIN.COVS.FOR.ANNOTATION) {
     mutate(annotation.coverage = this.cov)
 }
 
-hhr.phrogs = do.call('rbind', hhr.phrogs.list)
+hhr.phrogs = do.call('rbind', hhr.phrogs.list) %>% 
+  mutate(annotation.coverage = factor(annotation.coverage, levels = MAIN.COVS.FOR.ANNOTATION))
 data.table::fwrite(hhr.phrogs, file = sprintf("%shhr.phrogs",OUTPUT.DATA.PATH))
 
 # now only look at annotations that we want to include
@@ -65,6 +66,14 @@ relaxely.annotated.proteins.including.multi.annot = annotated.proteins.raw %>%
   mutate(num.annots = n_distinct(annotation)) %>%
   ungroup() 
 
+mid.annotated.proteins.including.multi.annot = annotated.proteins.raw %>%
+  filter(annotation.coverage == 0.3) %>%
+  select(qname, annotation.index, annotation, category, structural, annotation.coverage, include) %>%
+  group_by(qname) %>%
+  # number of annotations including the excluded ones
+  mutate(num.annots = n_distinct(annotation)) %>%
+  ungroup() 
+
 surely.annotated.proteins.including.multi.annot = annotated.proteins.raw %>%
   filter(annotation.coverage == DEFAULT.NINIMUM.COV.FOR.ANNOTATION) %>%
   select(qname, annotation.index, annotation, category, structural, annotation.coverage, include) %>%
@@ -73,6 +82,7 @@ surely.annotated.proteins.including.multi.annot = annotated.proteins.raw %>%
   ungroup() 
 data.table::fwrite(surely.annotated.proteins.including.multi.annot, file = sprintf("%ssurely.annotated.proteins.including.multi.annot",OUTPUT.DATA.PATH))
 data.table::fwrite(relaxely.annotated.proteins.including.multi.annot, file = sprintf("%srelaxely.annotated.proteins.including.multi.annot",OUTPUT.DATA.PATH))
+data.table::fwrite(mid.annotated.proteins.including.multi.annot, file = sprintf("%smid.annotated.proteins.including.multi.annot",OUTPUT.DATA.PATH))
 
 # We only include categories that have MIN.NUM.PROT including the proteins with multiple annotation
 included.category.sizes = rbind(surely.annotated.proteins.including.multi.annot, relaxely.annotated.proteins.including.multi.annot) %>%
@@ -95,6 +105,9 @@ ecod.domain.descriptions = read.delim(ECOD.DOMAIN.DESCRIPTION.FILEPATH,
                                       skip = 4, header = TRUE, 
                                       colClasses = classes, sep = "\t") %>%
   select(X.uid, ecod_domain_id, arch_name, x_name, h_name, t_name, f_name, f_id) 
+
+
+
 
 
 ecod.domain.hits.raw = data.table::fread(file = ECOD.DOMAIN.HITS.PATH)
@@ -186,11 +199,15 @@ protein.similarity.data = protein.similarity.data %>%
   mutate(share.a.fragment = share.any.fragment & pident >= MINIMUM.PIDENT.FOR.PAIRWISE.HIT/100,
          share.a.fragment.pident10 = share.any.fragment & pident >= 0.1,
          share.a.fragment.pident30 = share.any.fragment & pident >= 0.3,
-         share.a.fragment.pident50 = share.any.fragment & pident >= 0.5) %>%
+         share.a.fragment.pident50 = share.any.fragment & pident >= 0.5,
+         share.a.fragment.pident70 = share.any.fragment & pident >= 0.7,
+         share.a.fragment.pident90 = share.any.fragment & pident >= 0.9) %>%
   mutate(mosaic = share.a.fragment & not.similar,
          mosaic.pident10 = share.a.fragment.pident10 & not.similar,
          mosaic.pident30 = share.a.fragment.pident30 & not.similar,
-         mosaic.pident50 = share.a.fragment.pident50 & not.similar)
+         mosaic.pident50 = share.a.fragment.pident50 & not.similar,
+         mosaic.pident70 = share.a.fragment.pident70 & not.similar,
+         mosaic.pident90 = share.a.fragment.pident90 & not.similar)
 
 
 data.table::fwrite(protein.similarity.data, file = sprintf("%sprotein.similarity.data.txt",OUTPUT.DATA.PATH))
