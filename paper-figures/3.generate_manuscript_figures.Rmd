@@ -46,8 +46,21 @@ dir.create(sprintf("%sFigure2", OUTPUT.FIGURES.PATH))
 dir.create(sprintf("%sFigure3", OUTPUT.FIGURES.PATH))
 dir.create(sprintf("%sFigure4", OUTPUT.FIGURES.PATH))
 dir.create(sprintf("%sFigure5", OUTPUT.FIGURES.PATH))
-dir.create(sprintf("%sFigure_Alternatives", OUTPUT.FIGURES.PATH))
 dir.create(sprintf("%sFigure_Supplementary", OUTPUT.FIGURES.PATH))
+
+
+dir.create(sprintf("%sFigure_Supplementary/FigS1_tradeoff/", OUTPUT.FIGURES.PATH))
+dir.create(sprintf("%sFigure_Supplementary/FigS2_annot_network/", OUTPUT.FIGURES.PATH))
+dir.create(sprintf("%sFigure_Supplementary/FigS3_num_F_per_H/", OUTPUT.FIGURES.PATH))
+dir.create(sprintf("%sFigure_Supplementary/FigS4_all_T_domains/", OUTPUT.FIGURES.PATH))
+dir.create(sprintf("%sFigure_Supplementary/FigS5_p_vs_cov/", OUTPUT.FIGURES.PATH))
+dir.create(sprintf("%sFigure_Supplementary/FigS6/", OUTPUT.FIGURES.PATH))
+dir.create(sprintf("%sFigure_Supplementary/FigS7_folds_shared_by_mosaic/", OUTPUT.FIGURES.PATH))
+dir.create(sprintf("%sFigure_Supplementary/FigS8_annot_low_cov/", OUTPUT.FIGURES.PATH))
+dir.create(sprintf("%sFigure_Supplementary/FigS9_ecod_hist/", OUTPUT.FIGURES.PATH))
+dir.create(sprintf("%sFigure_Supplementary/FigS10_poor_ecod/", OUTPUT.FIGURES.PATH))
+dir.create(sprintf("%sFigure_Supplementary/FigS11_recent_HGT/", OUTPUT.FIGURES.PATH))
+dir.create(sprintf("%sFigure_Supplementary/FigS12/", OUTPUT.FIGURES.PATH))
 
 color.map.df = PHROG.COLOR.MAP %>% stack()
 names(color.map.df) = c("color", "category")
@@ -60,6 +73,7 @@ names(color.map.df) = c("color", "category")
 ```{r, eval = FALSE}
 num.proteins = n_distinct(repr.seq.lengths$name)
 
+
 # NOTE THAT IN FIGURE 1 WE DO NOT RESTRICT OURSELVES TO CATEGORIES THAT ARE BIG ENOUGH
 annotation.uncertainty.data = data.frame(annotation.coverage = character(0), minimum.probability = character(0), maximum.eval = character(0),
                                          num.prot = integer(0), num.annotated = integer(0), perc.annotated = numeric(0), perc.unique.annotation = numeric(0))
@@ -69,23 +83,15 @@ annotation.uncertainty.data.prob = Calculate.Annotation.Tradeoff(hhr.phrogs.anno
                                                                  max.eval.range = DEFAULT.NAXIMUM.EVAL.FOR.ANNOTATION, 
                                                                         min.cov.range = MAIN.COVS.FOR.ANNOTATION, 
                                                                         min.prob.range = MINIMUM.PROBABILITIES.FOR.ANNOTATION)
-data.table::fwrite(annotation.uncertainty.data.prob, sprintf("%sFigure1/Fig1_Tradeoff_prob.txt", OUTPUT.FIGURES.PATH)) 
+data.table::fwrite(annotation.uncertainty.data.prob, sprintf("%sFigure_Supplementary/FigS1_tradeoff/Tradeoff_prob.txt", OUTPUT.FIGURES.PATH)) 
 
 annotation.uncertainty.data.cov= Calculate.Annotation.Tradeoff(hhr.phrogs.annotated,
                                                                max.eval.range = DEFAULT.NAXIMUM.EVAL.FOR.ANNOTATION, 
                                                                         min.cov.range = MINIMUM.COVERAGES.FOR.ANNOTATION, 
                                                                         min.prob.range = MAIN.PROBS.FOR.ANNOTATION)
-data.table::fwrite(annotation.uncertainty.data.cov, sprintf("%sFigure1/Fig1_Tradeoff_cov.txt", OUTPUT.FIGURES.PATH)) 
+data.table::fwrite(annotation.uncertainty.data.cov, sprintf("%sFigure_Supplementary/FigS1_tradeoff/Tradeoff_cov.txt", OUTPUT.FIGURES.PATH)) 
 ```
 
-```{r, eval = FALSE}
-annotation.uncertainty.data.eval = Calculate.Annotation.Tradeoff(hhr.phrogs.annotated,
-                                                                 max.eval.range = NAXIMUM.EVALS.FOR.ANNOTATION, 
-                                                                        min.cov.range = MAIN.COVS.FOR.ANNOTATION, 
-                                                                        min.prob.range = DEFAULT.MINIMUM.PROB.FOR.ANNOTATION)
-data.table::fwrite(annotation.uncertainty.data.eval, sprintf("%sFigure1/Fig1_Tradeoff_eval.txt", OUTPUT.FIGURES.PATH)) 
-
-```
 
 
 ```{r}
@@ -143,16 +149,20 @@ annotation.netwok.default.threshold = included.proteins.surely.annotated %>%
 
 
 
-
 data.table::fwrite(annotation.netwok.relaxed.threshold, 
-                   sprintf("%sFigure1/annotation.netwok.relaxed.threshold.txt", OUTPUT.FIGURES.PATH))
+                   sprintf("%sFigure_Supplementary/FigS2_annot_network/annotation.netwok.relaxed.threshold.txt", OUTPUT.FIGURES.PATH))
 data.table::fwrite(annotation.netwok.default.threshold, 
-                   sprintf("%sFigure1/annotation.netwok.default.threshold.txt", OUTPUT.FIGURES.PATH))
+                   sprintf("%sFigure_Supplementary/FigS2_annot_network/annotation.netwok.default.threshold.txt", OUTPUT.FIGURES.PATH))
 data.table::fwrite(annotation.network.metadata, 
-                   sprintf("%sFigure1/annotation.network.metadata.txt", OUTPUT.FIGURES.PATH))
+                   sprintf("%sFigure_Supplementary/FigS2_annot_network/annotation.network.metadata.txt", OUTPUT.FIGURES.PATH))
 ```
 
 ```{r}
+ecod.domains.with.annotations = ecod.domains.hits %>% 
+  filter(minimum.prob == MINIMUM.PROB.FOR.DOMAIN) %>%
+  distinct(qname, x_id, h_id, t_id, f_id) %>%
+  left_join(surely.annotated.proteins) 
+
 surely.annotated.ecod.domains = ecod.domains.hits %>% 
   select(qname, qstart, qend, qlength, sstart, send, slength, x_id, h_id, t_id, f_id, minimum.prob) %>%
   # note that some families may be unclassified i.e. d_id = NA
@@ -217,12 +227,13 @@ data.table::fwrite(h.domain.occurence.data, sprintf("%sFigure2/H_domains.txt", O
 #  inner_join(h.domain.occurence.data %>% distinct(h_id, h_name, all.categories)) %>%
 #  distinct(h_name, num_f, num_t, all.categories)
 
+
 num.f.within.h = 
 surely.annotated.ecod.domains.high.confidence  %>% group_by(h_id) %>% summarise(num_f = n_distinct(f_id), num_t = n_distinct(t_id), num_prot = n_distinct(qname)) %>%
   left_join(h.domain.occurence.data %>% distinct(h_id, h_name, all.categories) %>% mutate(in.ecod.heatmap = TRUE)) %>%
   distinct(h_name, num_f, num_t, num_prot, all.categories, in.ecod.heatmap)
 
-data.table::fwrite(num.f.within.h, sprintf("%sFigure2/num.f.within.h.txt", OUTPUT.FIGURES.PATH))
+data.table::fwrite(num.f.within.h, sprintf("%sFigure_Supplementary/FigS3_num_F_per_H/num.f.within.h.txt", OUTPUT.FIGURES.PATH))
 
 
 
@@ -247,7 +258,7 @@ t.domain.occurence.data.full = surely.annotated.ecod.domains.high.confidence %>%
                                   category, 
                                   "multiple categories")) %>%
   ungroup()
-data.table::fwrite(t.domain.occurence.data.full, sprintf("%sFigure2/T_domains.txt", OUTPUT.FIGURES.PATH))
+data.table::fwrite(t.domain.occurence.data.full, sprintf("%sFigure_Supplementary/FigS4_all_T_domains/T_domains.txt", OUTPUT.FIGURES.PATH))
 
 
 
@@ -265,13 +276,13 @@ data.table::fwrite(t.domain.occurence.data.full, sprintf("%sFigure2/T_domains.tx
 ```{r}
 # only filter to those with minimum length and high probability
  filtered.protein.similarity.data = protein.similarity.data %>% filter(share.any.fragment)
-data.table::fwrite(filtered.protein.similarity.data, sprintf("%sFigure3/cov.vs.pident.txt", OUTPUT.FIGURES.PATH))
+data.table::fwrite(filtered.protein.similarity.data, sprintf("%sFigure_Supplementary/FigS5_p_vs_cov/cov.vs.pident.txt", OUTPUT.FIGURES.PATH))
 ```
 
 # network of DNA, RNA, and nucleotide metabolism domains
 ```{r}
 selected_categories = c("DNA, RNA and nucleotide metabolism","tail", "lysis")
-nucl.metabolism.domain.network = data.frame(from = character(0), to = character(0), category = character(0), num.prot = numeric(0))
+domain.network.selected.categories = data.frame(from = character(0), to = character(0), category = character(0), num.prot = numeric(0))
 
 
 for (selected_category in selected_categories) {
@@ -283,7 +294,7 @@ for (selected_category in selected_categories) {
     inner_join(nucl.metabolism.domains.in.selected.category, by = c("t_id", "category")) %>%
     distinct(qname, t_id, category)
   # and we see what other doains coexist with these domains
-  nucl.metabolism.domain.network.this.cat = nucl.metabolism.domain.hits %>%
+  domain.network.selected.categories.this.cat = nucl.metabolism.domain.hits %>%
     inner_join(nucl.metabolism.domain.hits, by = c("qname", "category")) %>%
     filter(t_id.x < t_id.y) %>%
     rowwise() %>%
@@ -292,32 +303,89 @@ for (selected_category in selected_categories) {
     group_by(t_id.x, t_id.y, pair, category) %>%
     summarise(num.prot = n_distinct(qname)) %>%
     ungroup() %>%
-    select(from = t_id.x, to = t_id.y, category, num.prot) %>%
-    filter(num.prot >= 5)
-    nucl.metabolism.domain.network = rbind(nucl.metabolism.domain.network, nucl.metabolism.domain.network.this.cat)
+    select(from = t_id.x, to = t_id.y, category, num.prot) #%>%
+    #filter(num.prot >= 5)
+    domain.network.selected.categories = rbind(domain.network.selected.categories, domain.network.selected.categories.this.cat)
 }
 
 
 
   domain.annotations = surely.annotated.ecod.domains.high.confidence %>%
     filter(category %in% selected_categories)  %>%
-    distinct(t_id, annotation, category) %>%
     group_by(t_id, category) %>%
-    mutate(n = n_distinct(annotation)) %>%
-    arrange(t_id) %>%
-    summarise(annotation = if_else(all(n == 1), annotation[1], "multiple")) %>%
+    summarise(n = n_distinct(annotation),
+              n.prot = n_distinct(qname),
+              annotation = if_else(n == 1, annotation[1], "multiple")) %>%
     left_join(stack(PHROG.COLOR.MAP) %>% select(color = values, category = ind), by = "category") %>%
     mutate(multi = annotation == "multiple")  %>%
     mutate(color = if_else(multi, "black", color)) %>%
-    select(node = t_id, category, color)
+    select(node = t_id, category, color, n.prot)
   
-  domain.network.metadata = data.frame(node = unique(c(nucl.metabolism.domain.network$from, nucl.metabolism.domain.network$to))) %>%
+  domain.network.metadata = data.frame(node = unique(c(domain.network.selected.categories$from, domain.network.selected.categories$to))) %>%
     left_join(ecod_id_to_names_map %>% filter(level == "T") %>% select(node = id, label = name)) %>%
-    mutate(size = 1) %>%
     left_join(domain.annotations, by = "node")
   
 data.table::fwrite(domain.network.metadata, sprintf("%sFigure5/domain.network.metadata.txt", OUTPUT.FIGURES.PATH))
-data.table::fwrite(nucl.metabolism.domain.network, sprintf("%sFigure5/nucl.metabolism.domain.network.txt", OUTPUT.FIGURES.PATH))
+data.table::fwrite(domain.network.selected.categories, sprintf("%sFigure5/domain.network.selected.categories.txt", OUTPUT.FIGURES.PATH))
+
+```
+
+# All domains network
+```{r}
+
+ecod.domains.with.annotations$category[which(is.na(ecod.domains.with.annotations$category))] = "unknown"
+  edh = ecod.domains.with.annotations %>%
+    distinct(qname, t_id, category)
+  # and we see what other doains coexist with these domains
+  all.domain.network = edh %>%
+    inner_join(edh, by = c("qname", "category")) %>%
+    filter(t_id.x < t_id.y) %>%
+    #rowwise() %>%
+    #mutate(pair = paste(sort(c(t_id.x, t_id.y)), collapse = " AND ", sep = ""),
+    #       category = selected_category) %>%
+    group_by(t_id.x, t_id.y) %>%
+    mutate(num.prot = n_distinct(qname)) %>%
+    ungroup() %>%
+    select(from = t_id.x, to = t_id.y, category, num.prot) %>%
+    filter(num.prot >- 5) %>%
+    distinct(from, to, category)
+
+
+PHROG.COLOR.MAP_GENEARAL = c("integration and excision_general" = "#ffb300", 
+                  "head and packaging_general" = "#d8f2d3", 
+                  "transcription regulation_general" = "##cba1d1", 
+                  "connector_general" = "#05f043",
+                  "tail_general" = "#6c8c79",
+                  "lysis_general" = "#d16d6e", 
+                  "DNA, RNA and nucleotide metabolism_general" = "#8aa6bd", 
+                  "other_general" = "#e0e0e0",
+                  "moron, auxiliary metabolic gene and host takeover_general" = "##f5c9e0")
+PHROG.COLOR.MAP2 = c(PHROG.COLOR.MAP, PHROG.COLOR.MAP_GENEARAL)
+
+  all.domain.annotations = ecod.domains.with.annotations %>%
+    distinct(t_id, annotation, category) %>%
+    group_by(t_id) %>%
+    mutate(num.annots = n_distinct(annotation[category != "unknown"]),
+           num.categories = n_distinct(category[category != "unknown"])) %>%
+    arrange(t_id) %>%
+    summarise(category = if_else(
+      all(num.categories == 0), "unknown", 
+      if_else(all(num.categories >1), "multiple",
+              if_else(all(num.annots > 1), paste0(category[category != "unknown"][1], "_general") ,category[1])))) %>%
+    left_join(stack(PHROG.COLOR.MAP2) %>% select(color = values, category = ind), by = "category") %>%
+    mutate(multi = category == "multiple")  %>%
+    mutate(color = if_else(multi, "#000000", color)) %>%
+    mutate(color = if_else(category == "unknown", "#D3D3D3", color)) %>%
+    #mutate(color = if_else(grepl("general_", annotation) & !multi, adjustcolor(color, alpha.f = 0.2), color)) %>%
+    select(node = t_id, category, color)
+  
+  all.domain.network.metadata = data.frame(node = unique(c(all.domain.network$from, all.domain.network$to))) %>%
+    left_join(ecod_id_to_names_map %>% filter(level == "T") %>% select(node = id, label = name)) %>%
+    mutate(size = 1) %>%
+    left_join(all.domain.annotations, by = "node")
+  
+data.table::fwrite(all.domain.network.metadata, sprintf("%sFigure5/all.domain.network.metadata.txt", OUTPUT.FIGURES.PATH))
+data.table::fwrite(all.domain.network, sprintf("%sFigure5/all.domain.network.txt", OUTPUT.FIGURES.PATH))
 
 ```
 
@@ -349,7 +417,7 @@ recent_HGT_pairs = rbind( recent_HGT_pairs_raw %>%
   filter(num.prot.pairs >= 2) %>%
   filter(from <= to) %>%
   distinct() 
-data.table::fwrite(recent_HGT_pairs, sprintf("%sFigure5/recent_HGT_network.txt", OUTPUT.FIGURES.PATH))
+data.table::fwrite(recent_HGT_pairs, sprintf("%sFigure_Supplementary/FigS11_recent_HGT/recent_HGT_network.txt", OUTPUT.FIGURES.PATH))
 ```
 
 #Fig 4a and 4b Diversity of functional categories
@@ -479,40 +547,7 @@ num.folds.per.fold.type.data = all.x.and.t.within.fold.type %>%
   summarise(mean.num.t = mean(num.t))
 
 ecods.across.fold.types.data = ecods.across.fold.types %>% inner_join(all.x.and.t.within.fold.type) #%>% filter(num.x > 1)
-
-fold.type.pairs.that.share.t = ecods.across.fold.types.data %>%
-  inner_join(ecods.across.fold.types.data, by = c("annotation", "category", "t_id")) %>%
-  filter(fold.type.x != fold.type.y) %>%
-  left_join(ecods.across.fold.types %>% select(annotation, category, fold.type.x = fold.type, x.id.x = x_id)) %>%
-  left_join(ecods.across.fold.types %>% select(annotation, category, fold.type.y = fold.type, x.id.y = x_id)) 
-
-all.fold.type.pairs.sharing.t = fold.type.pairs.that.share.t %>%
-  distinct(fold.type.x, fold.type.y, annotation, category) %>%
-  rowwise() %>%
-  mutate(pair = paste(sort(c(fold.type.x, fold.type.y)), collapse = " AND ", sep = "")) %>% 
-  group_by(annotation, category)  %>%
-  summarise(num.pairs = n_distinct(pair)) %>%
-  ungroup()
-
-fold.type.pairs.that.share.t.and.disshare.x = fold.type.pairs.that.share.t %>%
-  filter(num.x.x > 1 & num.x.y > 1) %>%
-  group_by(fold.type.x, fold.type.y, t_id, annotation, category) %>%
-  mutate(all.x.within.both.fold.types = paste(sort(unique(c(x.id.x, x.id.y))), collapse = " & ")) %>%
-  ungroup() %>%
-  left_join(all.x.and.t.within.fold.type %>% select(all.x.within.fold.type.x =all.x, fold.type.x = fold.type)) %>%
-  left_join(all.x.and.t.within.fold.type %>% select(all.x.within.fold.type.y =all.x, fold.type.y = fold.type)) %>%
-  filter(all.x.within.both.fold.types != all.x.within.fold.type.x & all.x.within.both.fold.types != all.x.within.fold.type.y) 
-
-mosaicism.per.fold.type = fold.type.pairs.that.share.t.and.disshare.x %>%
-  distinct(fold.type.x, fold.type.y, annotation, category) %>%
-  rowwise() %>%
-  mutate(pair = paste(sort(c(fold.type.x, fold.type.y)), collapse = " AND ", sep = "")) %>% 
-  group_by(annotation, category)  %>%
-  summarise(num.mosaic.pairs = n_distinct(pair)) %>%
-  ungroup() %>%
-  left_join(all.fold.type.pairs.sharing.t) %>%
-  mutate(prob.mosaicism = num.mosaic.pairs/num.pairs)
-
+mosaicism.per.fold.type = Calculate.Mosaicism.Per.Fold.Type(ecods.across.fold.types.data, all.x.and.t.within.fold.type)
 
 ```
 
@@ -564,17 +599,7 @@ all.family.pairs.sharing.t.and.disshare.x = family.pairs.that.share.t %>%
   left_join(ecods.across.families %>% select(all.x.names.y =all.x.names, family.y = family)) %>%
   filter(all.x.within.both.families != all.x.names.x & all.x.within.both.families != all.x.names.y & all.x.names.y!= all.x.names.x) 
 
-mosaicism.per.family = all.family.pairs.sharing.t.and.disshare.x %>%
-  distinct(family.x, family.y, annotation, category) %>%
-  rowwise() %>%
-  mutate(pair = paste(sort(c(family.x, family.y)), collapse = "&", sep = "")) %>% 
-  group_by(annotation, category)  %>%
-  summarise(num.mosaic.pairs = n_distinct(pair)) %>%
-  ungroup() %>%
-  left_join(all.family.pairs.sharing.t) %>%
-  mutate(prob.mosaicism.if.sharing.fold.and.multi.x.family.measure = num.mosaic.pairs/num.pairs) %>%
-  distinct(annotation, category, prob.mosaicism.if.sharing.fold.and.multi.x.family.measure)
-
+mosaicism.per.family = Get.Num.Mosaic.Family.Pairs(all.family.pairs.sharing.t.and.disshare.x, all.family.pairs.sharing.t)
 
 diversity.data = diversity.data1 %>%
   left_join(mosaicism.per.fold.type) %>%
@@ -651,7 +676,7 @@ domains.shared.in.mosaic.pairs = domains.shared.in.mosaic.pairs %>%
     left_join(ecod_id_to_names_map %>% filter(level == "H") %>% select(h.index = id, h_name = name)) %>%
     left_join(ecod_id_to_names_map %>% filter(level == "T") %>% select(t_id = id, t_name = name)) 
 
-data.table::fwrite(domains.shared.in.mosaic.pairs, file = sprintf("%sFigure3/domains-shared-by-mosaic-pairs.txt", OUTPUT.FIGURES.PATH))
+data.table::fwrite(domains.shared.in.mosaic.pairs, file = sprintf("%sFigure_Supplementary/FigS7_folds_shared_by_mosaic/domains-shared-by-mosaic-pairs.txt", OUTPUT.FIGURES.PATH))
 ```
 
 
@@ -841,7 +866,7 @@ classes.with.few.ecod.annotated.prots.new = ecod.coverage.data %>%
          `proteome covered by ECOD hits` =prop.ecod.annotated.positions) %>%
   arrange(`prot. with any ECOD hit`)
 
-data.table::fwrite(classes.with.few.ecod.annotated.prots.new, sprintf("%sFigure_Supplementary/classes.with.few.ecod.annotated.txt", OUTPUT.FIGURES.PATH))
+data.table::fwrite(classes.with.few.ecod.annotated.prots.new, sprintf("%sFigure_Supplementary/FigS10_poor_ecod/classes.with.few.ecod.annotated.txt", OUTPUT.FIGURES.PATH))
 ```
 
 
@@ -968,12 +993,12 @@ prop.mosaic.and.mean.length.per.category = all.proteins %>%
 diversity.data2 = diversity.data %>%
   left_join(mosaic.pairs.from.included.funct %>% filter(annotation.index.from == annotation.index.to) %>% select(annotation.index = annotation.index.from, num.reprseq.pairs.domain)) %>%
   inner_join(prop.mosaic.and.mean.length.per.category)
-data.table::fwrite(diversity.data2, sprintf("%sFigure4/Diversity_vs_mosaicism.txt", OUTPUT.FIGURES.PATH))
+data.table::fwrite(diversity.data2, sprintf("%sFigure_Supplementary/FigS9_ecod_hist/Diversity_vs_mosaicism.txt", OUTPUT.FIGURES.PATH))
 data.table::fwrite(diversity.data2 %>%
   filter(data.type == "top.diversity") %>%
     select(mean.num.t, prop.mosaic.pairs.sequence.thr0p1, prop.mosaic.pairs.sequence.thr0p3, prop.mosaic.pairs.sequence.thr0p5, 
            prob.mosaicism, num.mosaic.pairs, annotation, category, mean.num.t.per.prot, prob.mosaicism.if.sharing.fold.and.multi.x.family.measure, 
-           prop.mosaic, num.reprseq.pairs.domain) %>%
+           prop.mosaic, num.reprseq.pairs.domain, num.theoretical.fold.type.pairs.with.multi.x) %>%
   tidyr::gather(key = "proportion", value = "value", -c("annotation", "category")), 
   sprintf("%sFigure4/mosaicism.top.diverse.classes.txt", OUTPUT.FIGURES.PATH))
 
@@ -1097,7 +1122,7 @@ sum(aa$both.signal)
 
 
 #SHINY PLOTS: DOMAINS WITHIN FUNCTIONS
-```{r}
+```{r, eval = TRUE}
 
 most.mosaic.annotations = diversity.data %>% filter(data.type == "top.diversity") %>% arrange(desc(prob.mosaicism)) %>% head(12) %>% pull(annotation.index)
 # too many domains if we include "tails"
@@ -1167,121 +1192,181 @@ tile.data.raw.domains$x.index <- sapply(1:nrow(tile.data.raw.domains), function(
     
     data.table::fwrite(tile.data, sprintf("%sFigure5/domain.positions.txt", OUTPUT.FIGURES.PATH))
 ```
+# shiny plots for selected sequences
+```{r, eval = TRUE}
+dnap.seq = read.table("/Users/bognasmug/MGG Dropbox/Projects/divRBP/phage-pp-workdir-refseq-hhblits/dnap-uniclust.txt")
+names(dnap.seq) = "qname"
 
-# Alternative Figures
-## Folds shared by unknown proteins with any domain mosaicism signal
-```{r}
+    domains.within.this.annotation = surely.annotated.ecod.domains.high.confidence %>% 
+      inner_join(dnap.seq) %>%
+        select(qname, annotation.index, annotation, qlength, qstart, qend, domain = "t_id", family)  %>% 
+        group_by(qname) %>%
+        mutate(all.domains = paste0(sort(unique(domain)), collapse = "_and_"),
+               # this is just used for ordering
+               first.domain = domain[qstart == min(qstart)][1]) %>%
+        ungroup() 
 
-unknwon.qname.pairs.sharing.t.and.disshare.x = qname.pairs.sharing.t.and.disshare.x.distinct %>%
-  left_join(surely.annotated.proteins %>% distinct(qname,annotation) %>% select(qname.x = qname, annotation.x = annotation)) %>%
-  left_join(surely.annotated.proteins %>% distinct(qname,annotation) %>% select(qname.y = qname, annotation.y = annotation)) %>%
-  filter(is.na(annotation.x) | is.na(annotation.y)) 
+      tile.data.dnap = Get.Domain.Positions.Data(
+        domains.within.this.annotation %>%
+          # take only one representative per each domain combination and family combination
+          group_by(all.domains, family) %>%
+          mutate(first.domain = first.domain[1],
+                  repr.qname = qname[1]) %>%
+          ungroup() %>%
+          filter(repr.qname == qname) %>%
+        arrange(first.domain, family)) %>%
+        mutate(annotation = "hypothetical DNA polymerase",
+               domain.level = "T") %>%
+        left_join(families, by = "qname") 
 
-unknwon.mosaic.pairs = unknwon.qname.pairs.sharing.t.and.disshare.x %>%
-  filter(qname.x < qname.y) %>%
-  distinct(qname.x, qname.y, t_id, family.x, family.y) %>%
-  rowwise() %>%
-  mutate(protein.pair = paste(sort(c(qname.x, qname.y)), collapse = "&", sep = "")) %>% 
-  ungroup() %>%
-  group_by(family.x, family.y, t_id) %>%
-  mutate(family.pair = paste(sort(c(family.x, family.y)), collapse = "&", sep = "")) %>%
-  ungroup() %>%
-  arrange(qname.x, qname.y) 
+tile.data.dnap.domains = tile.data.dnap %>% distinct(domain)
+tile.data.dnap$x.index <- sapply(1:nrow(tile.data.dnap), function(index){
+  this.topology <- tile.data.dnap$domain[index]
+  this.topology.x.index <- strsplit(this.topology, ".", fixed = T)[[1]][1] %>% as.character()
+})
 
 
-table.unknown.ecod = unknwon.mosaic.pairs %>%
-  group_by(t_id) %>%
-  summarise(num.pairs.of.families = n_distinct(family.pair),
-            num.pairs.of.proteins = n_distinct(protein.pair)) %>%
-  left_join(ecod_id_to_names_map %>% filter(level == "T") %>% select(t_id = id, t_name = name)) %>%
-  arrange(desc(num.pairs.of.proteins)) 
 
-table.unknown.ecod = table.unknown.ecod %>%
-  mutate(total.family.pairs = n_distinct(unknwon.mosaic.pairs$family.pair),
-         total.protein.pairs = n_distinct(unknwon.mosaic.pairs$protein.pair),
-         freq = num.pairs.of.families/total.family.pairs,
-         freq.q = num.pairs.of.proteins/total.protein.pairs)
-
-table.unknowns.ecod.filename <- sprintf("%sFigure_Alternatives/table-unknown-ecod.txt", OUTPUT.FIGURES.PATH)
-data.table::fwrite(table.unknown.ecod, file = table.unknowns.ecod.filename)
+  x_index_ecod_map = ecod_id_to_names_map %>% 
+                  filter(level == "X") %>%
+                  mutate(id = as.character(id)) %>%
+                  select(x.index = id, x_name = name) %>%
+                  rbind(data.frame(x.index = c("undetected", "multiple domains")) %>%
+                                   mutate(x_name = x.index))
+  
+    tile.data.dnap.final = tile.data.dnap %>%
+      left_join(ecod_id_to_names_map %>% 
+                  select(domain = id, domain_name = name, domain.level = level) %>%
+                  rbind(expand.grid(domain.level = unique(ecod_id_to_names_map$level), 
+                                    domain = c("undetected", "multiple domains")) %>%
+                                   mutate(domain_name = domain))) %>%
+      left_join(tile.data.dnap.domains) %>%
+      left_join(x_index_ecod_map, by = "x.index") 
+    
+data.table::fwrite(tile.data.dnap.final, sprintf("%sFigure5/domain.positions.dnap.uniclust.txt", OUTPUT.FIGURES.PATH))
 ```
 
 
-## Functions of unannotated proteins with any seq. mosaicism signal
 ```{r}
-# Only looking at pairsof proteins where both are from the same functional category
- unknown.proteins.mosaic.pairs.table = seq.mosaic.pairs %>%
-  # filter only those where at least one protein in a mosaic pair is unknown
-  filter(is.na(annotation.index.from) | is.na(annotation.index.to)) %>%
-  arrange(qname, sname)
+num.folds.per.fold.type.data.within.category = all.x.and.t.within.fold.type %>%
+  group_by(category) %>%
+  summarise(mean.num.t = mean(num.t))
 
-unknown.qnames.with.mosaic.signal = unknown.proteins.mosaic.pairs.table %>% 
-  filter(is.na(annotation.index.from)) %>% 
-  pull(qname) %>%
-  unique()
-
-unknown.snames.with.mosaic.signal = unknown.proteins.mosaic.pairs.table %>% 
-  filter(is.na(annotation.index.to)) %>% 
-  pull(sname) %>%
-  unique()
-
-unknown.proteins.with.any.mosaic.signal = data.frame(qname = unique(c(unknown.qnames.with.mosaic.signal, unknown.snames.with.mosaic.signal))) %>%
-  left_join(families, by = "qname") %>%
-  # look not only at the included categories
-  left_join(relaxely.annotated.proteins.including.multi.annot, #%>% filter(include), 
-            by = c("qname", "family")) %>%
-  mutate(annotation = if_else(is.na(annotation), "unknown", annotation)) %>%
-  mutate(category = if_else(is.na(category), "unknown", category)) %>%
-  group_by(qname, family) %>%
-  mutate(num.hits = n_distinct(annotation[annotation != "unknown"]),
-         annotation.weight = 1/num.hits,
-         is.unannotated = if_else(num.hits == 0,1,0)) %>%
-  ungroup() %>%
-  mutate(this.annot.weight = if_else(annotation != "unknown", annotation.weight, is.unannotated))
+mosaicism.per.fold.type.within.category = Calculate.Mosaicism.Per.Fold.Type(ecods.across.fold.types.data = ecods.across.fold.types.data %>% mutate(annotation = category), 
+                                                                            all.x.and.t.within.fold.type = all.x.and.t.within.fold.type %>% mutate(annotation = category))
 
 
-table.unknown.seq = unknown.proteins.with.any.mosaic.signal %>%
-  #group_by(family, annotation, category) %>%
-  #summarise(annotation.weight = mean(this.annot.weight)) %>%
-  group_by(annotation, category) %>%
-  summarise(weight = sum(annotation.weight)) %>%
-  ungroup() %>%
-  arrange(desc(weight))
 
-data.table::fwrite(table.unknown.seq, sprintf("%sFigure_Alternatives/table-unknown-seq.txt", OUTPUT.FIGURES.PATH))
+seq.mosaicism.from.various.classes.within.category = protein.similarity.data %>%
+  inner_join( surely.annotated.proteins %>% distinct(qname, category) %>% select(qname = qname, qannot = category)) %>%
+  inner_join( surely.annotated.proteins %>% distinct(qname, category) %>% select(sname = qname, sannot = category)) %>%
+  filter(qannot == sannot) %>%
+  group_by(qannot) %>%
+  summarise(prop.mosaic.pairs.sequence.thr0p1 = sum(mosaic.pident10)/n(),
+            prop.mosaic.pairs.sequence.thr0p3 = sum(mosaic.pident30)/n(),
+            prop.mosaic.pairs.sequence.thr0p5 = sum(mosaic.pident50)/n()) %>%
+  select(annotation = qannot, prop.mosaic.pairs.sequence.thr0p1, prop.mosaic.pairs.sequence.thr0p3, prop.mosaic.pairs.sequence.thr0p5)
 
+diversity.data.per.category = surely.annotated.proteins %>%
+  distinct(category) %>%
+  left_join(num.folds.per.fold.type.data.within.category) %>%
+  left_join(mosaicism.per.fold.type.within.category) %>%
+  left_join(seq.mosaicism.from.various.classes.within.category)   %>%
+  select(category, mean.num.t, prop.mosaic.pairs.sequence.thr0p1, prop.mosaic.pairs.sequence.thr0p3, prop.mosaic.pairs.sequence.thr0p5, 
+           prob.mosaicism, num.mosaic.pairs,
+         num.fold.types, num.fold.types.with.multi.x, num.theoretical.fold.type.pairs, num.theoretical.fold.type.pairs.with.multi.x, prop.pairs.mosaoc.by.domain, num.pairs.sharing.t) %>%
+  tidyr::gather(key = "proportion", value = "value", -category)
+data.table::fwrite(diversity.data.per.category, sprintf("%sFigure4/mosaicism.per.category.txt", OUTPUT.FIGURES.PATH))
 ```
 
+```{r, eval = FALSE}
+levels = c("mean.num.t", 
+           "prop.mosaic.pairs.sequence.thr0p1",
+           "prop.mosaic.pairs.sequence.thr0p3",
+           "prop.mosaic.pairs.sequence.thr0p5", 
+           "prob.mosaicism",
+           "num.mosaic.pairs")
 
-## Functions of all unannotated proteins
-```{r}
-# Only looking at pairsof proteins where both are from the same functional category
+diversity.data.per.category = diversity.data.per.category %>% mutate(proportion = factor(proportion, levels = levels))
+diversity.levels <- levels(diversity.data.per.category$proportion)
+diversity.labeller <- character(length(diversity.levels))
+diversity.labeller[diversity.levels == "mean.num.t"] <- "Mean number of folds\nper fold architecture"
+diversity.labeller[diversity.levels == "prop.mosaic.pairs.sequence.thr0p1"] <- "Proportion of mosaic pairs\nby sequence (10%)"
+diversity.labeller[diversity.levels == "prop.mosaic.pairs.sequence.thr0p3"] <- "Proportion of mosaic pairs\nby sequence (30%)"
+diversity.labeller[diversity.levels == "prop.mosaic.pairs.sequence.thr0p5"] <- "Proportion of mosaic pairs\nby sequence (50%)"
+diversity.labeller[diversity.levels == "prob.mosaicism"] <- "Prob. of domain mosaicism\nbetween fold architectures\nif sharing a fold"
+diversity.labeller[diversity.levels == "num.mosaic.pairs"] <- "Number of pairs\nmosaic by domain"
+#diversity.labeller[diversity.levels == "num.reprseq.pairs.domain"] <- "Number of protein pairs\nwith domain mosaicism"
+#diversity.labeller[diversity.levels == "prop.mosaic"] <- "Prop. of proteins\nhaving any mosaic signal."
+names(diversity.labeller) <- diversity.levels
 
- unknown.proteins.table = repr.seq.lengths %>%
-  distinct(qname = name) %>%
-  left_join(surely.annotated.proteins %>% distinct(qname,annotation)) %>%
-  filter(is.na(annotation)) %>%
-  distinct(qname) %>%
-  left_join(families, by = "qname") %>%
-  left_join(relaxely.annotated.proteins.including.multi.annot, #%>% filter(include), 
-            by = c("qname", "family")) %>%
-  mutate(annotation = if_else(is.na(annotation), "unknown", annotation)) %>%
-  mutate(category = if_else(is.na(category), "unknown", category)) %>%
-  group_by(qname, family) %>%
-  mutate(num.hits = n_distinct(annotation[annotation != "unknown"]),
-         annotation.weight = 1/num.hits,
-         is.unannotated = if_else(num.hits == 0,1,0)) %>%
-  ungroup() %>%
-  mutate(this.annot.weight = if_else(annotation != "unknown", annotation.weight, is.unannotated))
+p <- ggplot(diversity.data.per.category, aes(y = category, x = value, fill = category)) +
+  geom_bar(stat = "identity", position=position_dodge()) +
+  facet_grid(category ~ proportion, scales = "free", space = "free_y", 
+                    labeller = labeller(category = phrog.class.labels, proportion = diversity.labeller)) +
+  scale_fill_manual(values = PHROG.COLOR.MAP) + theme_minimal() + 
+  theme(strip.text.y = element_text(face = "bold", size = 7, angle = 360)) + 
+  labs(x = "", y = "") +
+  scale_x_continuous(labels=function(x) sprintf("%.2f", x))
+
+p.most.diverse <- p + guides(fill = "none")
+p.most.diverse
 
 
-table.all.unknown.seq = unknown.proteins.table %>%
-  #group_by(family, annotation, category) %>%
-  #summarise(annotation.weight = mean(this.annot.weight)) %>%
-  group_by(annotation, category) %>%
-  summarise(weight = sum(annotation.weight)) %>%
-  ungroup() %>%
-  arrange(desc(weight))
 
-data.table::fwrite(table.all.unknown.seq, sprintf("%sFigure_Alternatives/table-all-unknown-seq.txt", OUTPUT.FIGURES.PATH))
+
+
+Plot.Diversity.Data2 = function(diversity.data.per.category) {
+  levels = c( "num.fold.types", 
+              "num.fold.types.with.multi.x", 
+              "num.theoretical.fold.type.pairs", 
+              "num.theoretical.fold.type.pairs.with.multi.x",
+              "num.pairs.sharing.t",
+              "num.mosaic.pairs",
+              "prop.pairs.mosaoc.by.domain")
+  
+  diversity.data.per.category = diversity.data.per.category %>% filter(proportion %in% levels) %>% mutate(proportion = factor(proportion, levels = levels))
+  diversity.levels <- levels(diversity.data.per.category$proportion)
+  diversity.labeller <- character(length(diversity.levels))
+  diversity.labeller[diversity.levels == "num.fold.types"] <- "Num fold\narchitectures"
+  diversity.labeller[diversity.levels == "num.fold.types.with.multi.x"] <- "Num folds\nwith multiple X"
+  diversity.labeller[diversity.levels == "num.theoretical.fold.type.pairs"] <- "Num fold\ntype pairs"
+  diversity.labeller[diversity.levels == "num.theoretical.fold.type.pairs.with.multi.x"] <- "Num pairs\nof fold types\n with multiple x"
+  diversity.labeller[diversity.levels == "num.pairs.sharing.t"] <- "Num pairs sharing T"
+  diversity.labeller[diversity.levels == "num.mosaic.pairs"] <- "Num mosaic pairs"
+  diversity.labeller[diversity.levels == "prop.pairs.mosaoc.by.domain"] <- "Prop. of pairs\nmosaic by domain"
+  #diversity.labeller[diversity.levels == "num.reprseq.pairs.domain"] <- "Number of protein pairs\nwith domain mosaicism"
+  #diversity.labeller[diversity.levels == "prop.mosaic"] <- "Prop. of proteins\nhaving any mosaic signal."
+  names(diversity.labeller) <- diversity.levels
+  
+  p <- ggplot(diversity.data.per.category, aes(y = annotation, x = value, fill = category)) +
+    geom_bar(stat = "identity", position=position_dodge()) +
+    facet_grid(category ~ proportion, scales = "free", space = "free_y", 
+                      labeller = labeller(category = phrog.class.labels, proportion = diversity.labeller)) +
+    scale_fill_manual(values = PHROG.COLOR.MAP) + theme_minimal() + 
+    theme(strip.text.y = element_text(face = "bold", size = 7, angle = 360)) + 
+    labs(x = "", y = "") +
+    scale_x_continuous(labels=function(x) sprintf("%.2f", x))
+  
+  p.most.diverse <- p + guides(fill = "none")
+  return(p.most.diverse)
+}
+
+p.most.diverse = Plot.Diversity.Data2(diversity.data.per.category %>% mutate(annotation = category))
+p.most.diverse
+ggsave(sprintf("%sFigure4/Figure4_per_category2.pdf", OUTPUT.FIGURES.PATH), p.most.diverse, width = 20, height = 5)
+
+
+div.data.long = diversity.data  %>%
+  select(category, annotation, mean.num.t, prop.mosaic.pairs.sequence.thr0p1, prop.mosaic.pairs.sequence.thr0p3, prop.mosaic.pairs.sequence.thr0p5, 
+           prob.mosaicism, num.mosaic.pairs,
+         num.fold.types, num.fold.types.with.multi.x, num.theoretical.fold.type.pairs, num.theoretical.fold.type.pairs.with.multi.x, prop.pairs.mosaoc.by.domain, num.pairs.sharing.t) %>%
+  tidyr::gather(key = "proportion", value = "value", -category, -annotation)
+
+p.most.diverse = Plot.Diversity.Data2(div.data.long)
+p.most.diverse
+ggsave(sprintf("%sFigure4/Figure4_2.pdf", OUTPUT.FIGURES.PATH), p.most.diverse, width = 20, height = 10)
+
+
+
 ```

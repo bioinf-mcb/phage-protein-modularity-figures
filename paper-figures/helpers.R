@@ -221,7 +221,9 @@ Get.Domain.Positions.Data = function(annotated.ecod.domains) {
 }
 
 
-Show.Domain.Position.Within.Data = function(tile.data, colormap, my.theme = theme_bw(), color.frames = FALSE, legend.position = "bottom") {
+Show.Domain.Position.Within.Data = function(tile.data, colormap, my.theme = theme_bw(), 
+                                            color.frames = FALSE, legend.position = "bottom",
+                                            interactive.plot = TRUE) {
   if (nrow(tile.data) == 0) {
     gg_rect = ggplot() + geom_blank()
   } else {
@@ -238,22 +240,32 @@ Show.Domain.Position.Within.Data = function(tile.data, colormap, my.theme = them
       gg_rect0 = ggplot(tile.data, aes(color = domain))  +
         scale_color_manual(values = colormap[which(names(colormap) %in% unique(tile.data$domain))], name = "Domain")
     }
-    gg_rect = gg_rect0 +   
-      geom_blank(aes(x=pos.start, y = qname)) +
-      geom_rect_interactive(mapping = aes(xmin = pos.start, xmax = pos.end,
-                                          ymin = row, ymax = row.plus, fill = domain,
-                                          tooltip = tooltip), alpha=1) +
-      scale_x_continuous(name="position", limits = c(0, max(tile.data$pos.end))) +
-      ylab("") +
+    if (interactive.plot) {
+      gg_rect1 = gg_rect0 +   
+        geom_blank(aes(x=pos.start, y = qname)) +
+        geom_rect_interactive(mapping = aes(xmin = pos.start, xmax = pos.end,
+                                            ymin = row, ymax = row.plus, fill = domain, 
+                                            tooltip = tooltip), alpha=1)       
+    } else {
+      gg_rect1 = gg_rect0 +   
+        geom_blank(aes(x=pos.start, y = qname)) +
+        geom_rect(mapping = aes(xmin = pos.start, xmax = pos.end,
+                                            ymin = row, ymax = row.plus, fill = domain), alpha=1) 
+    }
+  gg_rect = gg_rect1 +
+      scale_x_continuous(name="position", limits = c(0, max(tile.data$pos.end)),  expand = c(0, 0)) +
+      scale_y_discrete(name = "", expand = c(0, 0)) +
       # leave in the egend only the colors that we can actually see
-      scale_fill_manual(values = colormap[which(names(colormap) %in% unique(tile.data$domain))], name = "Domain") + 
+      scale_fill_manual(values = colormap[which(names(colormap) %in% unique(tile.data$domain))], 
+                        name = "Domain",
+                        guide = guide_legend(ncol = 2)) + 
       facet_grid(. ~annotation) + 
       my.theme +
-      theme(legend.position = legend.position) +
-      guides(
-        color = guide_legend(show = FALSE),
-        fill=guide_legend(nrow = 5,byrow=TRUE)
-      )
+      theme(legend.position = legend.position) #+
+      #guides(
+      #  color = guide_legend(show = FALSE),
+      #  fill = guide_legend(nrow = 5,byrow=TRUE)
+      #)
   }
   #guides(fill = "none")
   return(gg_rect)
@@ -387,3 +399,190 @@ VisualiseIgraphnetwork = function(data.for.network,
   }
   return(p.plot)
 }
+
+
+Calculate.Mosaicism.Per.Fold.Type = function(ecods.across.fold.types.data, all.x.and.t.within.fold.type) {
+  num.pairs.of.fold.types = ecods.across.fold.types.data %>% 
+    group_by(annotation, category) %>%
+    summarise(num.fold.types = n_distinct(fold.type),
+              num.fold.types.with.multi.x = n_distinct(fold.type[num.x > 1])) %>%
+    ungroup() %>%
+    mutate(num.theoretical.fold.type.pairs = num.fold.types*(num.fold.types-1)/2,
+          num.theoretical.fold.type.pairs.with.multi.x = num.fold.types.with.multi.x*(num.fold.types.with.multi.x-1)/2)
+  
+  fold.type.pairs.that.share.t = ecods.across.fold.types.data %>%
+    inner_join(ecods.across.fold.types.data, by = c("annotation", "category", "t_id")) %>%
+    filter(fold.type.x != fold.type.y) %>%
+    left_join(ecods.across.fold.types %>% select(annotation, category, fold.type.x = fold.type, x.id.x = x_id)) %>%
+    left_join(ecods.across.fold.types %>% select(annotation, category, fold.type.y = fold.type, x.id.y = x_id)) 
+  
+  all.fold.type.pairs.sharing.t = fold.type.pairs.that.share.t %>%
+    distinct(fold.type.x, fold.type.y, annotation, category) %>%
+    rowwise() %>%
+    mutate(pair = paste(sort(c(fold.type.x, fold.type.y)), collapse = " AND ", sep = "")) %>% 
+    group_by(annotation, category)  %>%
+    summarise(num.pairs.sharing.t = n_distinct(pair)) %>%
+    ungroup()
+  
+  fold.type.pairs.that.share.t.and.disshare.x = fold.type.pairs.that.share.t %>%
+    filter(num.x.x > 1 & num.x.y > 1) %>%
+    group_by(fold.type.x, fold.type.y, t_id, annotation, category) %>%
+    mutate(all.x.within.both.fold.types = paste(sort(unique(c(x.id.x, x.id.y))), collapse = " & ")) %>%
+    ungroup() %>%
+    left_join(all.x.and.t.within.fold.type %>% select(all.x.within.fold.type.x =all.x, fold.type.x = fold.type)) %>%
+    left_join(all.x.and.t.within.fold.type %>% select(all.x.within.fold.type.y =all.x, fold.type.y = fold.type)) %>%
+    filter(all.x.within.both.fold.types != all.x.within.fold.type.x & all.x.within.both.fold.types != all.x.within.fold.type.y) 
+  
+ mosaic.pairs.num = fold.type.pairs.that.share.t.and.disshare.x %>%
+    distinct(fold.type.x, fold.type.y, annotation, category) %>%
+    rowwise() %>%
+    mutate(pair = paste(sort(c(fold.type.x, fold.type.y)), collapse = " AND ", sep = "")) %>% 
+    group_by(annotation, category)  %>%
+    summarise(num.mosaic.pairs = n_distinct(pair)) %>%
+    ungroup()
+    
+  mosaicism.per.fold.type   = ecods.across.fold.types.data %>% 
+    distinct(annotation, category) %>%
+    left_join(mosaic.pairs.num) %>%
+    left_join(all.fold.type.pairs.sharing.t) %>%
+    left_join(num.pairs.of.fold.types) %>%
+    mutate(prob.mosaicism = num.mosaic.pairs/num.pairs.sharing.t,
+           prop.pairs.mosaoc.by.domain = num.mosaic.pairs/num.theoretical.fold.type.pairs)
+  
+  return(mosaicism.per.fold.type)
+}
+
+
+Get.Num.Mosaic.Family.Pairs = function(all.family.pairs.sharing.t.and.disshare.x, all.family.pairs.sharing.t) {
+  mosaicism.per.family = all.family.pairs.sharing.t.and.disshare.x %>%
+    distinct(family.x, family.y, annotation, category) %>%
+    rowwise() %>%
+    mutate(pair = paste(sort(c(family.x, family.y)), collapse = "&", sep = "")) %>% 
+    group_by(annotation, category)  %>%
+    summarise(num.mosaic.pairs = n_distinct(pair)) %>%
+    ungroup() %>%
+    left_join(all.family.pairs.sharing.t) %>%
+    mutate(prob.mosaicism.if.sharing.fold.and.multi.x.family.measure = num.mosaic.pairs/num.pairs) %>%
+    distinct(annotation, category, prob.mosaicism.if.sharing.fold.and.multi.x.family.measure)
+  return(mosaicism.per.family)
+}
+
+Plot.Domain.Combinations = function(tile.data.object, text.size.axis = 9, text.size.panel = 12, interactive.plot = FALSE) {
+  domain.position.plots = list()
+  domain.legend.plots = list()
+  tile.data.object = tile.data.object %>%
+    # keep only the ones with multidomain
+    group_by(qname) %>%
+    mutate(num.domains = n_distinct(domain[domain != "undetected"])) %>%
+    ungroup() %>%
+    filter(num.domains > 1)
+  
+  for (this.annotation in unique(tile.data.object$annotation) %>% sort()) {
+    this.tile.data = tile.data.object %>% 
+      filter(annotation == this.annotation)  %>% 
+      mutate(annotation = this.annotation) %>%
+      arrange(row) %>%
+      group_by(qname) %>%
+      arrange(pos.start, pos.end) %>% 
+      mutate(domain.combination = paste(unique(domain), collapse = " | ", sep = ""),
+             domain.combination2 = paste(unique(domain[domain != "undetected" & domain != "multiple domains"]), collapse = " | ", sep = "")) %>%
+      ungroup() %>%
+      arrange(qname) %>%
+      # select only one qname per domain combination
+      group_by(domain.combination2) %>%
+      arrange(pos.start) %>%
+      mutate(qname1 = qname[1],
+             num.qnames.this.domain.combination = n_distinct(qname)) %>%
+      ungroup() %>%
+      filter(qname == qname1) %>%
+      rowwise() %>%
+      mutate(domain_new = if_else(
+        domain_name == "undetected" | domain_name == "multiple domains",
+        domain_name,
+        #paste(domain_name, " (X: ", x_name, " [nr  ",x.index ,"]", ")", collapse = "", sep = ""))) %>%
+        #paste(x.index, ": ", domain_name, collapse = "", sep = ""))) %>%
+        paste(domain, ": ", domain_name,  collapse = "", sep = "")),
+        qname = paste(qname, "(", num.qnames.this.domain.combination, " prot.)",collapse = "", sep = "")) %>%
+      ungroup() #%>%
+    #rowwise() %>%
+    #mutate(domain_new = gsub(" ", "\n", domain_new))
+    
+    
+    # create a color pallete where domains from common X are different shades of the same color
+    this.x = this.tile.data %>% filter(!(domain %in% c("undetected", 
+                                                       "multiple domains"))) %>% distinct(x.index) %>% pull(x.index)
+    #x.colors = randomcoloR::distinctColorPalette(length(this.x))
+    x.colors = colorRampPalette(brewer.pal(12, "Paired"))(length(this.x))
+    x.colors = data.frame(x.index = this.x, color = x.colors)
+    all.colors = data.frame(domain = character(0), color = character(0))
+    for (this.x.index in this.x) {
+      all.domains = this.tile.data %>% filter(x.index == this.x.index) %>% distinct(domain_new) %>% 
+        pull(domain_new)
+      this.color = x.colors %>% filter(x.index == this.x.index) %>% pull(color)
+      this.x.colors.pallete =  colorRampPalette(this.color)
+      this.colors = this.x.colors.pallete(length(all.domains))
+      all.colors = rbind(all.colors, data.frame(domain = all.domains, color = this.colors))
+      print(length(all.domains))
+    }
+    
+    all.colors = rbind(all.colors %>% arrange(domain), data.frame(domain = c("undetected", "multiple domains"), 
+                                                                  color = c( "#FFFFFF",  "#000000"), stringsAsFactors = FALSE))
+    
+    colm = all.colors$color
+    names(colm) = all.colors$domain
+    
+    
+    this.tile.data.row.numbers = this.tile.data %>%
+      arrange(domain.combination2, qname) %>%
+      distinct(domain.combination2, qname) %>%
+      mutate(dummy = 1) %>%
+      group_by(dummy) %>%
+      mutate(row.plus = 1:n()) %>%
+      mutate(row = row.plus - 0.5)
+    
+    this.tile.data = this.tile.data %>%
+      select(-row, -row.plus) %>%
+      left_join(this.tile.data.row.numbers)
+    
+    
+    legend.dummy.plot.data = this.tile.data %>% 
+      distinct(x.index, domain_new) %>%
+      arrange(x.index)
+    dummy.plot = ggplot(legend.dummy.plot.data) + 
+      geom_col(aes(x = domain_new, y = 1, fill = domain_new)) +
+      scale_fill_manual(values = colm[which(names(colm) %in% unique(legend.dummy.plot.data$domain_new))], 
+                        name = "Domain",
+                        guide = guide_legend(ncol = 1)) + 
+      theme(legend.margin=margin(c(0,0,0,0)),
+            legend.key.size = unit(0.45, "cm"))
+    leg <- ggpubr::get_legend(dummy.plot, position = "right")
+    ggleg = ggpubr::as_ggplot(leg)
+    #domain.legend.plots[[this.annotation]] =  ggleg
+    
+    
+    gg_rect = Show.Domain.Position.Within.Data(
+      tile.data = this.tile.data %>% select(-domain) %>% rename(domain = domain_new),
+      colormap = colm, 
+      my.theme = theme.no.verical, 
+      color.frames = FALSE,
+      interactive.plot = interactive.plot,
+      legend.position = "none") +
+      #scale_y_discrete(breaks =this.tile.data$qname, labels = this.tile.data$family) +
+      
+      theme(strip.text.x = element_text(size = text.size.panel), 
+            #legend.box="vertical", legend.margin=margin(),
+            axis.title.x = element_text(size = text.size.axis),
+            axis.title.y = element_text(size = text.size.axis),
+            #axis.text.x = element_blank(),
+            #axis.text.y = element_blank(),
+            axis.text.y = element_text(size = text.size.axis)
+            #axis.ticks.x = element_blank(),
+            #axis.ticks.y = element_blank()
+      ) 
+    #if (interactive.plot) {gg_rect = girafe(ggobj=gg_rect)}
+    domain.position.plots[[this.annotation]] = plot_grid(gg_rect, ggleg,  ncol = 2,rel_widths = c(0.65, 0.35))
+    
+  }
+  return(list(domain.position.plots = domain.position.plots, gg_rect = gg_rect))
+}
+
