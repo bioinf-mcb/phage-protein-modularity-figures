@@ -12,6 +12,7 @@ set.seed(1)
 options(stringsAsFactors = F)
 
 
+
 DROPBOX.PATH =  "/Users/bognasmug/MGG Dropbox/"
 # DROPBOX.PATH =  "/Users/rmostowy/MGG Dropbox/"
 
@@ -23,6 +24,12 @@ FAMILIES.FILEPATH = "/Users/bognasmug/MGG Dropbox/Projects/divRBP/rafals-figures
 PROJECT.PATH = sprintf("%s/Projects/divRBP/",DROPBOX.PATH)
 source(sprintf("%scode/protein-mosaicism/paper-figures/helpers.R", PROJECT.PATH))
 DATA.PATH = sprintf("%s/phage-pp-workdir-refseq-hhblits/output/", PROJECT.PATH)
+
+
+CLUSTERING_RESULTS_PATH = sprintf("%sprot-families/representative/clustering.tsv", DATA.PATH)
+PROTEIN_NAMES_MAPPING_PATH = sprintf("%sprot-families/representative/name-table.txt", DATA.PATH)
+
+
 
 # TO DO: CHANGE IT BACK TO MAIN CLUSTER PROJECT ONCE IT IS CORRECT
 #PROFILE.SIMILARITY.TABLE = sprintf("%sprot-families/families/dataset-full/repr-hits-pairwise-prob50.csv", DATA.PATH)

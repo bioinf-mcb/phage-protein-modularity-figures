@@ -231,3 +231,17 @@ table.hhr = data.table::fread(hhr.table.filename) %>%
 
 families = data.table::fread(FAMILIES.FILEPATH) %>% select(qname = members, family)
 data.table::fwrite(families, file = sprintf("%sfamilies.txt", OUTPUT.DATA.PATH))
+
+
+
+clustering = read.table(CLUSTERING_RESULTS_PATH)
+names(clustering) = c('cluster', 'seq')
+prot.names = read.table(PROTEIN_NAMES_MAPPING_PATH, sep = ",", header = TRUE) 
+names(prot.names) = c("qname", "cluster")
+cluster.sizes = clustering %>%
+  left_join(prot.names, by = 'cluster') %>%
+  group_by(qname) %>%
+  summarise(n.prot.in.reprseq = n_distinct(seq))
+
+data.table::fwrite(cluster.sizes, file = sprintf("%snum.prot.in.reprseq.txt", OUTPUT.DATA.PATH))
+

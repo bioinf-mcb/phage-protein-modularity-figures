@@ -201,31 +201,41 @@ ggsave(p.figure, filename = sprintf("%sFigure_Supplementary/FigS2_annot_network/
 ```
 
 ```{r}
-recent_HGT_pairs = data.table::fread(sprintf("%sFigure_Supplementary/FigS11_recent_HGT/recent_HGT_network.txt", OUTPUT.FIGURES.PATH)) %>%
+recent_HGT_pairs_70 = data.table::fread(sprintf("%sFigure_Supplementary/FigS11_recent_HGT/recent_HGT_network_70.txt", OUTPUT.FIGURES.PATH)) %>%
   select(from, to, num.prot.pairs)
-
-
+recent_HGT_pairs_90 = data.table::fread(sprintf("%sFigure_Supplementary/FigS11_recent_HGT/recent_HGT_network_90.txt", OUTPUT.FIGURES.PATH)) %>%
+  select(from, to, num.prot.pairs)
 
 annotation.network.metadata = data.table::fread( 
                    sprintf("%sFigure_Supplementary/FigS2_annot_network/annotation.network.metadata.txt", OUTPUT.FIGURES.PATH)) %>%
   rbind(data.frame(node = 0, color = "#808080", size = 4, label = "unknown"))
 
-  
-annotated.recent_HGT_pairs = Annotate_Graph(recent_HGT_pairs, 
-                  edge.colors = NULL,
-                  node.color.map = annotation.network.metadata%>%
+
+
+pdf(sprintf("%sFigure_Supplementary/FigS11_recent_HGT//network_recent_HGT_igraph_70.pdf", OUTPUT.FIGURES.PATH), width = 6, height = 12) #, units = "cm", res = 300)
+par(mfrow=c(2,1))
+VisualiseIgraphnetwork(data.for.network = recent_HGT_pairs_70 %>% mutate(weight = log10(num.prot.pairs)/3),
+                      edge.colors = NULL,
+                      node.color.map = annotation.network.metadata%>%
                                       select(node, color),
-                  # node these sizes are defined at high threshold
-                  node.size.map = annotation.network.metadata %>%
+                      # node these sizes are defined at high threshold
+                      node.size.map = annotation.network.metadata %>%
                                       select(node, size),
-                  node.labels = annotation.network.metadata %>% 
+                      node.labels = annotation.network.metadata %>% 
                     select(node, label),
-                  line.color.variable =  "from")
+                      line.color.variable = "from",
+                      line.color.legend.name = NULL,
+                      font.size = 0.75,
+                      vertex.size = 1,
+                      main = "",
+                      vertex.label.dist = 1,
+                      include.labels = TRUE,
+                      alpha = 0.3)
+dev.off()
 
 
-
-jpeg(filename = sprintf("%sFigure_Supplementary/FigS11_recent_HGT//network_recent_HGT_igraph.jpg", OUTPUT.FIGURES.PATH), width = 15, height = 15, units = "cm", res = 300)
-VisualiseIgraphnetwork(data.for.network = recent_HGT_pairs %>% mutate(weight = log10(num.prot.pairs)/3),
+pdf(sprintf("%sFigure_Supplementary/FigS11_recent_HGT//network_recent_HGT_igraph_90.pdf", OUTPUT.FIGURES.PATH), width = 6, height = 6) # units = "cm", res = 300)
+VisualiseIgraphnetwork(data.for.network = recent_HGT_pairs_90 %>% mutate(weight = log10(num.prot.pairs)/3),
                       edge.colors = NULL,
                       node.color.map = annotation.network.metadata%>%
                                       select(node, color),
@@ -377,7 +387,7 @@ ggsave(sprintf("%sFigure_Supplementary/FigS4_all_T_domains/T_domains.jpg", OUTPU
 
 
 
-```{r}
+```{r, fig.width = 10}
 
 most.mosaic.classes = c("tail fiber","tail spike", "endolysin", "DNA polymerase")
   tile.data = data.table::fread(sprintf("%sFigure5/domain.positions.txt", OUTPUT.FIGURES.PATH)) %>%
@@ -386,11 +396,15 @@ most.mosaic.classes = c("tail fiber","tail spike", "endolysin", "DNA polymerase"
 domain.position.plots =Plot.Domain.Combinations(tile.data, text.size.axis = 9, text.size.panel = 12)$domain.position.plots
 pdf(sprintf("%sFigure5/domain.positions_most_mosaic.pdf", OUTPUT.FIGURES.PATH), 
          width = 17,
-         height = 20)
+         height = 20
+   # units = "cm",
+    #res = 300
+   )
 do.call("grid.arrange", c(domain.position.plots, ncol=1))
 dev.off()
+```
 
-
+```{r, eval = FALSE}
 tile.data.dnap.final = data.table::fread(sprintf("%sFigure5/domain.positions.dnap.uniclust.txt", OUTPUT.FIGURES.PATH))
 domain.position.plots =Plot.Domain.Combinations(tile.data.dnap.final, text.size.axis = 9, text.size.panel = 12, interactive.plot = TRUE)$domain.position.plots
 pdf(sprintf("%sFigure5/domain.positions_hypothetical_dnap.uniclust.pdf", OUTPUT.FIGURES.PATH), 

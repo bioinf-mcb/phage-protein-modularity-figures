@@ -29,6 +29,7 @@ relaxely.annotated.proteins.including.multi.annot =data.table::fread(sprintf("%s
 mid.annotated.proteins.including.multi.annot =data.table::fread(sprintf("%smid.annotated.proteins.including.multi.annot",OUTPUT.DATA.PATH)) %>%
   left_join(families)
 included.category.sizes = data.table::fread(sprintf("%sincluded.category.sizes",OUTPUT.DATA.PATH))
+num.prot.in.reprseq = data.table::fread(file = sprintf("%snum.prot.in.reprseq.txt", OUTPUT.DATA.PATH))
 
 # disregard the ones with multiple annotations
 surely.annotated.proteins = surely.annotated.proteins.including.multi.annot %>% filter(num.annots == 1 & include == "TRUE")
@@ -229,7 +230,11 @@ data.table::fwrite(h.domain.occurence.data, sprintf("%sFigure2/H_domains.txt", O
 
 
 num.f.within.h = 
-surely.annotated.ecod.domains.high.confidence  %>% group_by(h_id) %>% summarise(num_f = n_distinct(f_id), num_t = n_distinct(t_id), num_prot = n_distinct(qname)) %>%
+surely.annotated.ecod.domains.high.confidence  %>% 
+  group_by(h_id) %>% 
+  summarise(num_f = n_distinct(f_id), 
+            num_t = n_distinct(t_id), 
+            num_prot = n_distinct(qname)) %>%
   left_join(h.domain.occurence.data %>% distinct(h_id, h_name, all.categories) %>% mutate(in.ecod.heatmap = TRUE)) %>%
   distinct(h_name, num_f, num_t, num_prot, all.categories, in.ecod.heatmap)
 
@@ -393,7 +398,7 @@ data.table::fwrite(all.domain.network, sprintf("%sFigure5/all.domain.network.txt
 
 # Network of recent HGT
 ```{r}
-recent_HGT_pairs_raw = protein.similarity.data %>%
+recent_HGT_pairs_raw.70 = protein.similarity.data %>%
   #filter(mosaic.pident70) %>%
   filter(mosaic.pident70) %>%
   select(qname, sname) %>%
@@ -405,7 +410,7 @@ recent_HGT_pairs_raw = protein.similarity.data %>%
   ungroup()
 
 
-recent_HGT_pairs = rbind( recent_HGT_pairs_raw %>%
+recent_HGT_pairs.70 = rbind( recent_HGT_pairs_raw.70 %>%
   select(from = qindex, to = sindex, pair),
   recent_HGT_pairs_raw %>%
   select(to = qindex, from = sindex, pair)) %>%
@@ -417,7 +422,36 @@ recent_HGT_pairs = rbind( recent_HGT_pairs_raw %>%
   filter(num.prot.pairs >= 2) %>%
   filter(from <= to) %>%
   distinct() 
-data.table::fwrite(recent_HGT_pairs, sprintf("%sFigure_Supplementary/FigS11_recent_HGT/recent_HGT_network.txt", OUTPUT.FIGURES.PATH))
+
+data.table::fwrite(recent_HGT_pairs.70, sprintf("%sFigure_Supplementary/FigS11_recent_HGT/recent_HGT_network_70.txt", OUTPUT.FIGURES.PATH))
+
+
+recent_HGT_pairs_raw.90 = protein.similarity.data %>%
+  #filter(mosaic.pident70) %>%
+  filter(mosaic.pident90) %>%
+  select(qname, sname) %>%
+  left_join(surely.annotated.proteins.from.included.categories %>% select(qname, qindex = annotation.index)) %>%
+  left_join(surely.annotated.proteins.from.included.categories %>% select(sname = qname, sindex = annotation.index)) %>%
+  #filter(qindex != sindex & !is.na(qindex) & !is.na(sindex)) %>%
+  rowwise() %>%
+  mutate(pair = paste(sort(c(qname, sname)), collapse = " AND ", sep = "")) %>%
+  ungroup()
+
+
+recent_HGT_pairs.90 = rbind( recent_HGT_pairs_raw.90 %>%
+  select(from = qindex, to = sindex, pair),
+  recent_HGT_pairs_raw %>%
+  select(to = qindex, from = sindex, pair)) %>%
+  mutate(from = if_else(is.na(from),as.integer(0), from),
+         to = if_else(is.na(to), as.integer(0), to)) %>%
+  group_by(from, to) %>%
+  summarise(num.prot.pairs = n_distinct(pair)) %>%
+  ungroup() %>%
+  filter(num.prot.pairs >= 2) %>%
+  filter(from <= to) %>%
+  distinct() 
+
+data.table::fwrite(recent_HGT_pairs.90, sprintf("%sFigure_Supplementary/FigS11_recent_HGT/recent_HGT_network_90.txt", OUTPUT.FIGURES.PATH))
 ```
 
 #Fig 4a and 4b Diversity of functional categories
@@ -1115,8 +1149,14 @@ aa=all.proteins %>%
   summarise(any.signal = any(mosaic.seq) | any(mosaic.domain),
             both.signal = any(mosaic.seq) & any(mosaic.domain))
 
-sum(aa$any.signal)
-sum(aa$both.signal)
+bb = data.frame(
+ any.signal = sum(aa$any.signal),
+ both.signal = sum(aa$both.signal),
+ all.classes = nrow(aa))
+write.xlsx(x=bb, 
+           file = sprintf("%stables/%s", OUTPUT.FIGURES.PATH, excel.filename), 
+           sheetName = "num annots with mosaic signal", 
+  col.names = TRUE, row.names = TRUE, append = TRUE)
 
 ```
 
@@ -1125,6 +1165,7 @@ sum(aa$both.signal)
 ```{r, eval = TRUE}
 
 most.mosaic.annotations = diversity.data %>% filter(data.type == "top.diversity") %>% arrange(desc(prob.mosaicism)) %>% head(12) %>% pull(annotation.index)
+
 # too many domains if we include "tails"
 tile.data.list = list()
 i=0
@@ -1140,7 +1181,7 @@ this.domain.level.id = paste0(tolower(this.domain.level), "_id")
         mutate(all.domains = paste0(sort(unique(domain)), collapse = "_and_"),
                # this is just used for ordering
                first.domain = domain[qstart == min(qstart)][1]) %>%
-        ungroup() 
+        ungroup()
     
     if (nrow(domains.within.this.annotation) > 0) {
       i=i+1
@@ -1156,7 +1197,8 @@ this.domain.level.id = paste0(tolower(this.domain.level), "_id")
         mutate(annotation.index = this.annotation.index,
                annotation = unique(domains.within.this.annotation$annotation),
                domain.level = this.domain.level) %>%
-        left_join(families, by = "qname")
+        left_join(families, by = "qname")  %>%
+      left_join(num.prot.in.reprseq, by = "qname")
       tile.data.list[[i]] = tile.data
           
     }
@@ -1193,7 +1235,7 @@ tile.data.raw.domains$x.index <- sapply(1:nrow(tile.data.raw.domains), function(
     data.table::fwrite(tile.data, sprintf("%sFigure5/domain.positions.txt", OUTPUT.FIGURES.PATH))
 ```
 # shiny plots for selected sequences
-```{r, eval = TRUE}
+```{r, eval = FALSE}
 dnap.seq = read.table("/Users/bognasmug/MGG Dropbox/Projects/divRBP/phage-pp-workdir-refseq-hhblits/dnap-uniclust.txt")
 names(dnap.seq) = "qname"
 

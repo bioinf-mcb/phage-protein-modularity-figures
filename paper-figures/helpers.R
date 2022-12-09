@@ -478,7 +478,7 @@ Plot.Domain.Combinations = function(tile.data.object, text.size.axis = 9, text.s
     filter(num.domains > 1)
   
   for (this.annotation in unique(tile.data.object$annotation) %>% sort()) {
-    this.tile.data = tile.data.object %>% 
+    this.tile.data.raw = tile.data.object %>% 
       filter(annotation == this.annotation)  %>% 
       mutate(annotation = this.annotation) %>%
       arrange(row) %>%
@@ -487,13 +487,23 @@ Plot.Domain.Combinations = function(tile.data.object, text.size.axis = 9, text.s
       mutate(domain.combination = paste(unique(domain), collapse = " | ", sep = ""),
              domain.combination2 = paste(unique(domain[domain != "undetected" & domain != "multiple domains"]), collapse = " | ", sep = "")) %>%
       ungroup() %>%
-      arrange(qname) %>%
+      arrange(qname) 
+    
+    
+    num.represeq.per.combination =  this.tile.data.raw %>%
+      distinct(domain.combination2, qname, n.prot.in.reprseq) %>%
+      group_by(domain.combination2) %>%
+      summarise(num.prot.in.combination = sum(n.prot.in.reprseq)) %>%
+      ungroup()
+      
+    this.tile.data = this.tile.data.raw %>%
       # select only one qname per domain combination
       group_by(domain.combination2) %>%
       arrange(pos.start) %>%
       mutate(qname1 = qname[1],
-             num.qnames.this.domain.combination = n_distinct(qname)) %>%
+             num.reprseq.this.domain.combination = n_distinct(qname)) %>%
       ungroup() %>%
+      left_join(num.represeq.per.combination) %>%
       filter(qname == qname1) %>%
       rowwise() %>%
       mutate(domain_new = if_else(
@@ -502,7 +512,7 @@ Plot.Domain.Combinations = function(tile.data.object, text.size.axis = 9, text.s
         #paste(domain_name, " (X: ", x_name, " [nr  ",x.index ,"]", ")", collapse = "", sep = ""))) %>%
         #paste(x.index, ": ", domain_name, collapse = "", sep = ""))) %>%
         paste(domain, ": ", domain_name,  collapse = "", sep = "")),
-        qname = paste(qname, "(", num.qnames.this.domain.combination, " prot.)",collapse = "", sep = "")) %>%
+        qname = paste(qname, "(", num.prot.in.combination, ")",collapse = "", sep = "")) %>%
       ungroup() #%>%
     #rowwise() %>%
     #mutate(domain_new = gsub(" ", "\n", domain_new))
