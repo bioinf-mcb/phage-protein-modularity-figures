@@ -31,7 +31,7 @@ dev.off()
 
 
 # Fig 1
-```{r, eval = FALSE}
+```{r, eval = TRUE}
 col1.uniqueness <- "darkgreen"
 col2.coverage <- "darkred"
 point.size = 3
@@ -122,32 +122,7 @@ for (selected_category in unique(domain.network.metadata$category)) {
 
 ```
 
-```{r}
-all.domain.network.metadata =   data.table::fread(sprintf("%sFigure5/all.domain.network.metadata.txt", OUTPUT.FIGURES.PATH)) 
-all.domain.network = data.table::fread(sprintf("%sFigure5/all.domain.network.txt", OUTPUT.FIGURES.PATH))
 
-  annotated.all.domain.network = Annotate_Graph(all.domain.network, 
-                    edge.colors = NULL,
-                    node.color.map = all.domain.network.metadata %>%
-                                        select(node, color),
-                    # node these sizes are defined at high threshold
-                    node.size.map = all.domain.network.metadata %>%
-                                        select(node, size),
-                    node.labels = all.domain.network.metadata %>% 
-                      select(node, label) %>%
-                      rowwise() %>%
-                      mutate(label = gsub(" ", "\n", label))%>%
-                      mutate(label = if_else(label == "Intramolecular\nchaperone\ndomain\nin\nvirus\ntail\nspike\nprotein", "Intramolecular\nchaperone\ndomain in\nvirus tail\nspike protein", label)) ,
-                    line.color.variable =  "from")
-  
-  annotated.domain.network.figure = VisualiseGGnetwork(annotated.all.domain.network, 
-                     cex = 0.1, label_size = 1.5, layout = igraph::nicely(), main = "", 
-                     nudge_y = 0, alpha = 1)
-  annotated.domain.network.figure
-  ggsave(annotated.domain.network.figure, filename = sprintf("%sFigure5/annotated.ALL.domain.network.figure.png", OUTPUT.FIGURES.PATH, selected_category), width = 28, height = 28)
-
-
-```
 
 
 ```{r}
@@ -255,6 +230,47 @@ VisualiseIgraphnetwork(data.for.network = recent_HGT_pairs_90 %>% mutate(weight 
 dev.off()
 
 ```
+
+
+# recently transferred domains (recent HGT & domains)
+```{r}
+text_size.x = 6
+text_size.y = 6
+recent_HGT_pairs_raw.domain.data.all.pident70 = read.csv(sprintf("%sFigure_Supplementary/recent_HGT_domains.pident70.csv", OUTPUT.FIGURES.PATH))
+recent_HGT_pairs_raw.domain.data.to.plot.all.pident70 = recent_HGT_pairs_raw.domain.data.all.pident70 %>%
+  filter(n_pairs > 5)
+recent_HGT_pairs_raw.domain.data.to.plot.all.pident70$t_name = factor(recent_HGT_pairs_raw.domain.data.to.plot.all.pident70$t_name, levels = unique(recent_HGT_pairs_raw.domain.data.to.plot.all.pident70$t_name))
+p=ggplot(recent_HGT_pairs_raw.domain.data.to.plot.all.pident70) + geom_col(aes(x = t_name, y = n_pairs, fill = h_name), col = "black") +
+  theme_bw() +
+    theme(axis.text.x = element_text(angle=45, hjust =1,vjust=1, size = text_size.x),
+        axis.text.y = element_text(hjust = 1, size = text_size.y),
+        legend.position = "left") +
+  scale_y_sqrt(breaks = c(2,10,25,50,100,150)) +
+  xlab("") +
+  ylab("Num. protein pairs")
+ggsave(sprintf("%sFigure_Supplementary/recent_HGT_domains_pident70.jpg", OUTPUT.FIGURES.PATH), p, width = 15, height = 7)
+
+
+recent_HGT_pairs_raw.domain.data.to.plot.all.pident90 = read.csv(sprintf("%sFigure_Supplementary/recent_HGT_domains.pident90.csv", OUTPUT.FIGURES.PATH))
+recent_HGT_pairs_raw.domain.data.to.plot.all.pident90 = recent_HGT_pairs_raw.domain.data.to.plot.all.pident90 %>%
+  filter(n_pairs > 2)
+recent_HGT_pairs_raw.domain.data.to.plot.all.pident90$t_name = factor(recent_HGT_pairs_raw.domain.data.to.plot.all.pident90$t_name, levels = unique(recent_HGT_pairs_raw.domain.data.to.plot.all.pident90$t_name))
+p=ggplot(recent_HGT_pairs_raw.domain.data.to.plot.all.pident90) + geom_col(aes(x = t_name, y = n_pairs, fill = h_name), col = "black") +
+  theme_bw() +
+  #facet_grid(stat~., scales = "free") +
+    theme(axis.text.x = element_text(angle=45, hjust =1,vjust=1, size = text_size.x),
+        axis.text.y = element_text(hjust = 1, size = text_size.y),
+        legend.position = "left") +
+  scale_y_sqrt(breaks = c(2,10,25,50,100,150)) +
+  xlab("") +
+  ylab("Num. protein pairs")
+ggsave(sprintf("%sFigure_Supplementary/recent_HGT_domains_pident90.jpg", OUTPUT.FIGURES.PATH), p, width = 15, height = 7)
+```
+
+
+
+
+
 
 # Fig 3 network
 ```{r}
@@ -607,36 +623,9 @@ ggsave(sprintf("%sFigure4/Figure4.pdf", OUTPUT.FIGURES.PATH), p.fig4, width = 15
 # plot the relation between genetic and structural diversity
 ```
 
-```{r, eval = FALSE}
-levels.supp = c("mean.num.t.per.prot", 
-           "prob.mosaicism.if.sharing.fold.and.multi.x.family.measure")
-diversity.top.supp = data.table::fread(sprintf("%sFigure4/mosaicism.top.diverse.classes.txt", OUTPUT.FIGURES.PATH)) %>%
-  filter(proportion %in% levels.supp)
-diversity.top.supp = diversity.top.supp %>% mutate(proportion = factor(proportion, levels = levels.supp))
-diversity.levels.supp <- levels(diversity.top.supp$proportion)
-diversity.labeller <- character(length(diversity.levels.supp))
-diversity.labeller[diversity.levels.supp == "mean.num.t.per.prot"] <- "Mean number of folds\nper protein family"
-diversity.labeller[diversity.levels.supp == "prob.mosaicism.if.sharing.fold.and.multi.x.family.measure"] <- "Probability of domain mosaicism\nbetween protein families \nif sharing a fold \nand having multiple X domains"
-
-names(diversity.labeller) <- diversity.levels.supp
-
-p <- ggplot(diversity.top.supp, aes(y = annotation, x = value, fill = category)) +
-  geom_bar(stat = "identity", position=position_dodge()) +
-  facet_grid(category ~ proportion, scales = "free", space = "free_y", 
-                    labeller = labeller(category = phrog.class.labels, proportion = diversity.labeller)) +
-  scale_fill_manual(values = PHROG.COLOR.MAP) + theme_minimal() + 
-  theme(strip.text.y = element_text(face = "bold", size = 7, angle = 360)) + 
-  labs(x = "", y = "")
-p.most.diverse.supp <- p + guides(fill = "none")
-p.most.diverse.supp
-
-p.fig4.filename <- sprintf("%sFigure4/Figure4c_supplementary_version.png", OUTPUT.FIGURES.PATH)
-ggsave(p.fig4.filename, p.most.diverse.supp, width = 15, height = 8)
 
 
-```
-
-Poorly annotated ECOD analysis
+#Poorly annotated ECOD analysis
 ```{r}
 classes.with.few.ecod.annotated.prots.new = data.table::fread(sprintf("%sFigure_Supplementary/FigS10_poor_ecod/classes.with.few.ecod.annotated.txt", OUTPUT.FIGURES.PATH))
 classes.with.few.ecod.annotated.prots.new$annotation = factor(classes.with.few.ecod.annotated.prots.new$annotation , levels = unique(classes.with.few.ecod.annotated.prots.new$annotation))

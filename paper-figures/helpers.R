@@ -149,7 +149,7 @@ VisualiseGGnetwork = function(net_annotated, vertex.size = 0.5, cex = 0.1,
 }
 
 
-Get.Ecod.Annotation.Mapping.Numeric = function(distinct_domains, ecod.domain.descriptions) {
+Get.Ecod.Annotation.Mapping = function(distinct_domains, ecod.domain.descriptions) {
 
   unclassified.f.names = c("F_UNCLASSIFIED", "UNK_F_TYPE")
   ecod.domain.descriptions.full.names = ecod.domain.descriptions %>%
@@ -169,18 +169,53 @@ Get.Ecod.Annotation.Mapping.Numeric = function(distinct_domains, ecod.domain.des
     tidyr::unite(col = 't_id', x_ind, h_ind, t_ind, sep = ".", remove = FALSE) %>%
     tidyr::unite(col = 'f_id', x_ind, h_ind, t_ind, f_ind, sep = ".", remove = FALSE) 
 
-    
-
-  
   ecod.annotation.map = data.frame(domain = distinct_domains, stringsAsFactors = FALSE)
-  ecod.annotation.map$X.uid =  sapply(1:nrow(ecod.annotation.map),
-                                      function(row.index){Get.uid.From.ECOD.subject.id(ecod.annotation.map$domain[row.index])})
-  ecod.annotation.map$ecod_domain_id = sapply(1:nrow(ecod.annotation.map),
-                                              function(row.index){Get.ecod.domain.id.From.ECOD.subject.id(ecod.annotation.map$domain[row.index])})
+  ecod.annotation.map$X.uid =  sapply(1:nrow(ecod.annotation.map),function(row.index){Get.uid.From.ECOD.subject.id(ecod.annotation.map$domain[row.index])})
+  ecod.annotation.map$ecod_domain_id = sapply(1:nrow(ecod.annotation.map),function(row.index){Get.ecod.domain.id.From.ECOD.subject.id(ecod.annotation.map$domain[row.index])})
   ecod.annotation.map = ecod.annotation.map %>%
     left_join(ecod.domain.descriptions.full.names, by = c("X.uid", "ecod_domain_id"))
   return(ecod.annotation.map)
 }
+
+
+
+Get.Ecod.Id.To.Name.Map = function(ecod.annotation.map) {
+  # now find the names for each id
+  ecod_id_to_names_map = ecod.annotation.map %>% 
+    group_by(x_id) %>% 
+    summarise(name = paste(sort(unique(x_name)), collapse = " | ")) %>% 
+    select(id = x_id, name) %>%
+    mutate(level = "X")  %>%
+    rbind(ecod.annotation.map %>% 
+            group_by(h_id) %>% 
+            summarise(name = paste(sort(unique(h_name)), collapse = " | ")) %>% 
+            select(id = h_id, name) %>%
+            mutate(level = "H")) %>%
+    rbind(ecod.annotation.map %>% 
+            group_by(t_id) %>% 
+            summarise(name = paste(sort(unique(t_name)), collapse = " | ")) %>% 
+            select(id = t_id, name) %>%
+            mutate(level = "T") ) %>%
+    rbind(ecod.annotation.map %>% 
+            group_by(f_id) %>% 
+            summarise(name = paste(sort(unique(f_name)), collapse = " | ")) %>% 
+            select(id = f_id, name) %>%
+            mutate(level = "F") )
+  
+  
+  no_h_name_map = ecod.annotation.map %>% 
+    filter(h_name == "NO_H_NAME") %>% 
+    group_by(h_id) %>% 
+    summarise(h_name = paste(unique(t_name), collapse = " | ", sep = "")) %>%
+    select(id = h_id, name = h_name) %>%
+    mutate(level = "H")
+  
+  ecod_id_to_names_map = rbind(ecod_id_to_names_map %>% filter(name != "NO_H_NAME"),
+                               no_h_name_map)
+  return(ecod_id_to_names_map)
+}
+
+
 
 Get.Domain.Positions.Data = function(annotated.ecod.domains) {
   annotated.ecod.domains = annotated.ecod.domains %>% 
@@ -296,6 +331,26 @@ Get.significant.phrog.hits = function(hhr.phrogs, min.prob.threshold, min.scov.t
            eval <= max.eval.threshold)
   return(significant.hhr.phrogs)
 }
+
+
+
+GetPhrogAnnotationsData = function(hhr.phrogs.annotated, annotation.indexes, min.cov, min.prob, min.eval) {
+  annotated.proteins.including.multi.annot = Get.significant.phrog.hits(hhr.phrogs.annotated, 
+                                                                        min.prob.threshold = min.prob, 
+                                                                        min.qcov.threshold = min.cov, 
+                                                                        min.scov.threshold = min.cov, 
+                                                                        max.eval.threshold = min.eval) %>%
+    distinct(qname, annotation, category, include) %>%
+    left_join(annotation.indexes, by = c("annotation", "category")) %>% 
+    select(qname, annotation.index, annotation, category, include) %>%
+    group_by(qname) %>%
+    # number of annotations including the excluded ones
+    mutate(num.annots = n_distinct(annotation)) %>%
+    ungroup() 
+  return(annotated.proteins.including.multi.annot)
+}
+
+
 
 Calculate.Annotation.Tradeoff = function(hhr.phrogs.annotated, max.eval.range, min.cov.range, min.prob.range) {
   for (this.eval in max.eval.range)  {
@@ -596,3 +651,92 @@ Plot.Domain.Combinations = function(tile.data.object, text.size.axis = 9, text.s
   return(list(domain.position.plots = domain.position.plots, gg_rect = gg_rect))
 }
 
+
+Get.Recent.HGT.Domains = function(recent_HGT_pairs_raw, hhr.table, surely.annotated.proteins.from.included.categories, ecod.domains.hits) {
+  qnames.in.recent.HGT = unique(c(recent_HGT_pairs_raw$qname, recent_HGT_pairs_raw$sname))
+  hhr.table.filtered = hhr.table %>% 
+    filter(qname %in% qnames.in.recent.HGT | sname %in% qnames.in.recent.HGT) %>%
+    select(qname, sname, qstart, qend, sstart, send, prob)
+  
+  domains.in.qnames.in.recent.HGT = ecod.domains.hits %>% 
+    filter(qname %in% qnames.in.recent.HGT) %>%
+    select(qname, domain.hit.qstart = qstart, domain.hit.qend =qend, domain.hit.domain.start = sstart, domain.hit.domain.end = send, dmain.length = slength, t_id, prob) %>%
+    # we will choose one t_name per qname, this is a simplification as we may potentially have twice the same t name in one qname
+    group_by(qname, t_id) %>%
+    arrange(desc(prob)) %>%
+    mutate(order = row_number()) %>%
+    ungroup() %>%
+    filter(order == 1)
+  
+  
+  recent_HGT_pairs_raw.data.1 = recent_HGT_pairs_raw %>%
+    select(qname, sname) %>%
+    left_join(hhr.table.filtered, by= c('qname', 'sname'))
+  
+  recent_HGT_pairs_raw.data.2 = recent_HGT_pairs_raw %>%
+    select(sname = qname, qname = sname) %>%
+    left_join(hhr.table.filtered, by= c('qname', 'sname'))
+  
+  # make sure every protein in a pair is at least one on a query position
+  recent_HGT_pairs_raw.data = rbind(recent_HGT_pairs_raw.data.1, recent_HGT_pairs_raw.data.2) 
+  nrow.missing = nrow(recent_HGT_pairs_raw.data %>% filter(is.na(prob))) 
+  if ( nrow.missing > 1) {
+    print(paste0(nrow.missing, " some pairs are missing from hhr table"))
+    recent_HGT_pairs_raw.data = recent_HGT_pairs_raw.data %>% filter(!is.na(prob))
+    }
+  
+  recent_HGT_pairs_raw.domain.data.raw = recent_HGT_pairs_raw.data %>%
+    distinct(qname, sname, qstart, qend) %>%
+    # we may have multiple domains in one qname
+    left_join(domains.in.qnames.in.recent.HGT, by = "qname") %>%
+    rowwise() %>%
+    mutate(fragment.length = qend - qstart + 1,
+           domain.in.frament.length = min(domain.hit.qend, qend) - max(qstart, domain.hit.qstart) + 1) %>%
+    mutate(detected.domain.within.shared.fragment = domain.in.frament.length > 0,
+           domain.in.frament.l = max(domain.in.frament.length, 0),
+           prop.domain.in.fragment = domain.in.frament.l/dmain.length,
+           prop.fragment.covered.by.domain = domain.in.frament.length/fragment.length) %>%
+    ungroup()
+  
+  recent_HGT_pairs_raw.domain.data = recent_HGT_pairs_raw.domain.data.raw %>%
+    filter(detected.domain.within.shared.fragment) %>%
+    group_by(qname, sname,t_id) %>%
+    # we hopefully have just one hit between the rteins that share a fragment with high pident so can assume one row er combination
+    summarise(prop.domain.in.fragment = unique(prop.domain.in.fragment),
+              prop.fragment.covered.by.domain = unique(prop.fragment.covered.by.domain),
+              n = n()) %>%
+    ungroup() %>%
+    left_join(surely.annotated.proteins.from.included.categories %>% select(qname, qannot = annotation))  %>%
+    left_join(surely.annotated.proteins.from.included.categories %>% select(sname = qname, sannot = annotation))
+  
+  
+  if (nrow( recent_HGT_pairs_raw.domain.data %>% filter(n > 1)) > 0) {print("duplicated entries")}
+  
+  recent_HGT_pairs_raw.domain.data.to.plot.all = recent_HGT_pairs_raw.domain.data %>%
+    rowwise() %>%
+    mutate(pair = paste(sort(c(qname, sname)), collapse = "&", sep = "")) %>% 
+    group_by(pair, t_id) %>%
+    # note that they may actually differ a lot if we take difernt f_id fir both sides: they may have different length
+    summarise(av.prop.domain.in.fragment = mean(prop.domain.in.fragment),
+              av.prop.fragment.covered.by.domain = mean(prop.fragment.covered.by.domain)) %>%
+    group_by(t_id) %>%
+    summarise(n_pairs = n_distinct(pair), 
+              av.prop.domain.in.fragment = round(mean(av.prop.domain.in.fragment),2),
+              av.prop.fragment.covered.by.domain = round(mean(av.prop.fragment.covered.by.domain),2)) %>%
+    arrange(desc(n_pairs)) 
+  
+  
+  
+  recent_HGT_pairs_raw.domain.data.to.plot.all$h.index <- sapply(1:nrow(recent_HGT_pairs_raw.domain.data.to.plot.all), function(index){
+    this.topology <- recent_HGT_pairs_raw.domain.data.to.plot.all$t_id[index]
+    this.topology.h.index <- strsplit(this.topology, ".", fixed = T)[[1]]
+    this.topology.h.index <- this.topology.h.index[1:2]
+    this.topology.h.index <- as.character(paste(this.topology.h.index, collapse = "."))
+  })
+  
+  recent_HGT_pairs_raw.domain.data.to.plot.all = recent_HGT_pairs_raw.domain.data.to.plot.all %>%
+    left_join(ecod_id_to_names_map %>% filter(level == "H") %>% select(h.index = id, h_name = name)) %>%
+    left_join(ecod_id_to_names_map %>% filter(level == "T") %>% select(t_id = id, t_name = name)) 
+  
+  return(recent_HGT_pairs_raw.domain.data.to.plot.all)
+}
