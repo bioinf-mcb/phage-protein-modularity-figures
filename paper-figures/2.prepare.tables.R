@@ -129,17 +129,18 @@ table.hhr = data.table::fread(hhr.table.filename) %>%
 
 
 # families
-#families.raw = readLines(FAMILIES.RAW.FILEPATH) %>%
-#  stringi::stri_split_lines() %>%
-#  lapply(FUN = function(x) {unlist(strsplit(x, split = "\t"))})
-#names(families.raw) = paste0("fam", 1:length(families.raw))
-#families = families.raw %>% stack()
-#names(families) = c("qname", "family")
-#repr.seq.lengths = data.table::fread(file = sprintf("%sprot-families/representative/repr-seqs-lengths.txt", DATA.PATH))
-#qnames.with.no.family = setdiff(repr.seq.lengths$name, families$qname)
-#families.singletons = data.frame(qname = qnames.with.no.family) %>% mutate(family = paste0("fam", 1+length(families.raw):length(families.raw)+length(qnames.with.no.family)))
-#families = rbind(families, families.singletons)
-families = data.table::fread(FAMILIES.FILEPATH) %>% select(qname = members, family)
+families.raw = readLines(FAMILIES.RAW.FILEPATH) %>%
+  stringi::stri_split_lines() %>%
+  lapply(FUN = function(x) {unlist(strsplit(x, split = "\t"))})
+names(families.raw) = paste0("fam", 1:length(families.raw))
+families = families.raw %>% stack()
+names(families) = c("qname", "family")
+repr.seq.lengths = data.table::fread(file = sprintf("%sprot-families/representative/repr-seqs-lengths.txt", DATA.PATH))
+qnames.with.no.family = setdiff(repr.seq.lengths$name, families$qname)
+families.singletons = data.frame(qname = qnames.with.no.family) %>% mutate(family = paste0("fam", 1+length(families.raw):length(families.raw)+length(qnames.with.no.family)))
+families = rbind(families, families.singletons)
+
+#families = data.table::fread(FAMILIES.FILEPATH) %>% select(qname = members, family)
 data.table::fwrite(families, file = sprintf("%sfamilies.txt", OUTPUT.DATA.PATH))
 
 

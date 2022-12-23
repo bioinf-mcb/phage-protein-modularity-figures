@@ -61,8 +61,8 @@ ui <- shinyUI(fluidPage(
             uiOutput("annotation_selection"),
             #conditionalPanel(condition = "isvalidCategory",
             #                 uiOutput("annotation_selection")),
-            #conditionalPanel(condition="$('html').hasClass('shiny-busy')",
-            #                 tags$div("Calculating...",id="loadmessage")),
+            conditionalPanel(condition="$('html').hasClass('shiny-busy')",
+                             tags$div("Calculating...",id="loadmessage")),
           width = 3
         ),
         
@@ -91,11 +91,11 @@ ui <- shinyUI(fluidPage(
 
 # Define server logic required to draw a histogram
 server <- shinyServer(function(input, output, session) {
-  print(sessionInfo())
-  print(version)
+  #print(sessionInfo())
+  #print(version)
   
   
-  # LOAD SALL DATASET IF POSSIBLE
+  # LOAD ALL DATASET IF POSSIBLE
   # DON'T KEEP TOO MICH MEMORY IN THE DATA FOLDEE OR THE SERVER WILL BE SUPER SLOW
   
   track_usage(storage_mode = store_json(path = "logs/"))
