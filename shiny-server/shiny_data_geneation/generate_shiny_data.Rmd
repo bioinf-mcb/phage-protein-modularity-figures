@@ -3,7 +3,6 @@
 ```{r}
 # run config 
 source("~/MGG Dropbox/Projects/divRBP/code/protein-mosaicism/paper-figures/1.config.R")
-#run  prepare tables
 SHINY_DATA_PATH = "/Users/bognasmug/MGG Dropbox/Projects/divRBP/shiny-server/Phage.Domain.Lookup/data/"
 
 
@@ -85,17 +84,37 @@ for (this.category in unique(surely.annotated.ecod.domains.high.confidence$categ
                   select(domain = id, domain_name = name, domain.level = level) %>%
                   rbind(expand.grid(domain.level = unique(ecod_id_to_names_map$level), 
                                     domain = c("undetected", "multiple domains")) %>%
-                                   mutate(domain_name = domain)))
+                                   mutate(domain_name = domain))) %>%
+      rowwise() %>%
+      mutate(domain = if_else(domain == "undetected" | domain == "multiple domains", 
+                            domain,
+                            paste0(domain_name, " [", domain, "]")))
     
     tile.data.multi = do.call('rbind', tile.data.multi.list) %>%
       left_join(ecod_id_to_names_map %>% 
                   select(domain = id, domain_name = name, domain.level = level) %>%
                   rbind(expand.grid(domain.level = unique(ecod_id_to_names_map$level), 
                                     domain = c("undetected", "multiple domains")) %>%
-                                   mutate(domain_name = domain)))
+                                   mutate(domain_name = domain))) %>%
+      rowwise() %>%
+      mutate(domain = if_else(domain == "undetected" | domain == "multiple domains", 
+                            domain,
+                            paste0(domain_name, " [", domain, "]")))
     
-    data.table::fwrite(tile.data.multi, sprintf("%smultiple_domains.domain.positions.txt", SHINY_DATA_PATH))
-    data.table::fwrite(tile.data, sprintf("%sdomain.positions.txt", SHINY_DATA_PATH))
+    saveRDS(tile.data.multi, sprintf("%smultiple_domains.domain.positions.Rds", SHINY_DATA_PATH))
+    saveRDS(tile.data, sprintf("%sdomain.positions.Rds", SHINY_DATA_PATH))
 
-
+    
+annnotations.and.categories = tile.data %>% distinct(category, annotation, domain.level)      
+saveRDS(annnotations.and.categories, "/Users/bognasmug/MGG Dropbox/Projects/divRBP/shiny-server/Phage.Domain.Lookup/data/annnotations.and.categories.Rds")
+for (this.category in unique(annnotations.and.categories$category)) {
+    this.tile.data.multi = tile.data.multi %>% filter(category == this.category)
+    this.tile.data = tile.data %>% filter(category == this.category)
+    #data.table::fwrite(this.tile.data.multi, sprintf("%smultiple_domains.domain.positions_%s.txt", SHINY_DATA_PATH, this.category))
+    #data.table::fwrite(this.tile.data, sprintf("%sdomain.positions_%s.txt", SHINY_DATA_PATH, this.category))
+    #Rds files are smaller
+    saveRDS(this.tile.data.multi, sprintf("%smultiple_domains.domain.positions_%s.Rds", SHINY_DATA_PATH, this.category))
+    saveRDS(this.tile.data, sprintf("%sdomain.positions_%s.Rds", SHINY_DATA_PATH, this.category))
+}
+a=1
 ```

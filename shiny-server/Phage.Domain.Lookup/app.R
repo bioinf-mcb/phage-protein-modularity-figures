@@ -58,8 +58,9 @@ ui <- shinyUI(fluidPage(
                      ecod.levels %>%  pull(ecod.group),
                      selected = "T"),
             uiOutput("category_selection"),
-            conditionalPanel(condition = "isvalidCategory",
-                             uiOutput("annotation_selection")),
+            uiOutput("annotation_selection"),
+            #conditionalPanel(condition = "isvalidCategory",
+            #                 uiOutput("annotation_selection")),
             #conditionalPanel(condition="$('html').hasClass('shiny-busy')",
             #                 tags$div("Calculating...",id="loadmessage")),
           width = 3
@@ -90,14 +91,25 @@ ui <- shinyUI(fluidPage(
 
 # Define server logic required to draw a histogram
 server <- shinyServer(function(input, output, session) {
+  print(sessionInfo())
+  print(version)
+  
+  
+  # LOAD SALL DATASET IF POSSIBLE
+  # DON'T KEEP TOO MICH MEMORY IN THE DATA FOLDEE OR THE SERVER WILL BE SUPER SLOW
+  
   track_usage(storage_mode = store_json(path = "logs/"))
   # Create a Progress object
   progress <- shiny::Progress$new()
   # Make sure it closes when we exit this reactive, even if there's an error
   on.exit(progress$close())
-  
-  progress$set(message = "Loading data", value = 0)
-  
+  #tile.data = data.table::fread('data/domain.positions.txt')
+  annnotations.and.categories = readRDS("data/annnotations.and.categories.Rds")
+  tile.data = readRDS('data/domain.positions.Rds')  
+  progress$inc(10, detail = "Loading data |")
+  #tile.data.multi = data.table::fread('data/multiple_domains.domain.positions.txt')
+  tile.data.multi = readRDS('data/multiple_domains.domain.positions.Rds')
+  progress$inc(20, detail = "Loading data II")
   text.size = 12
   theme.no.verical = theme(
     panel.grid.major.x = element_blank(),
@@ -109,35 +121,49 @@ server <- shinyServer(function(input, output, session) {
 
   
   output$category_selection <- renderUI({
-    selectInput("Category",
+    selection = annnotations.and.categories %>% filter(domain.level == input$ecod_group) %>% distinct(category) %>% pull(category)
+    #print(selection)
+    selectInput(inputId = "Category",
                 label = "Select PHROG category:",
-                unique(tile.data$category) %>% sort(),
+                choices = selection,
                 selected = "tail") 
   })
   output$annotation_selection <- renderUI({
-    annot.selection = tile.data %>% filter(category == input$Category & domain.level == input$ecod_group) %>% pull(annotation) %>% unique() %>% sort()
-      selectInput("Annotation",
+    if (isvalidCategory() & !(is.null(input$ecod_group))) {
+    annot.selection = annnotations.and.categories %>% filter(category == input$Category & domain.level == input$ecod_group) %>% pull(annotation) %>% unique() %>% sort()
+    #print(annot.selection)
+    selected.annot =  "tail fiber"
+      selectInput(inputId = "Annotation",
                   label = "Choose specific annotation :",
-                  annot.selection,
-                  selected = "tail fiber") 
+                  choices = annot.selection,
+                  selected = selected.annot) 
+    } else {
+      #print("Invalid Category")
+    }
   })
   
   output$second_annotation_selection <- renderUI({
+    if(isValid_input()) {
     selectInput("second.Annotation",
                 label = paste0("Choose an annotation from those sharing a domain with : ",input$Annotation),
                 all.tiles.sharing.domains.with.this.annotation() %>% pull(annotation) %>% unique(),
                 selected = all.tiles.sharing.domains.with.this.annotation() %>% head(1) %>% pull(annotation) %>% unique()) 
+    }
   })
   
 
-  progress$inc(0, detail = "Loading data")
-  tile.data = data.table::fread('data/domain.positions.txt')
-  print(head(tile.data))
-  tile.data.multi = data.table::fread('data/multiple_domains.domain.positions.txt')
-  this.tile.data = reactive({tile.data %>% filter(annotation == input$Annotation & category == input$Category & domain.level == input$ecod_group)})
+  progress$inc(30, detail = "Loading data this annot")
+  this.category.tile.data  = reactive({tile.data %>% filter(category == input$Category)})
+  this.category.tile.data.multi  = reactive({tile.data.multi %>% filter(category == input$Category)})
+  
+  #this.category.tile.data  = reactive({readRDS(sprintf('data/domain.positions_%s.Rds', input$Category))})
+  #this.category.tile.data.multi  = reactive({readRDS(sprintf('data/multiple_domains.domain.positions_%s.Rds', input$Category))})
+  this.tile.data = reactive({this.category.tile.data() %>% 
+      filter(annotation == input$Annotation & category == input$Category & domain.level == input$ecod_group) })
   second.annotation.tile.data = reactive({tile.data %>% filter(annotation == input$second.Annotation & domain.level == input$ecod_group)})
-  this.tile.data.multi = reactive({tile.data.multi %>% filter(annotation == input$Annotation & category == input$Category & domain.level == input$ecod_group)})
-  progress$inc(100, detail = "Loading data")
+  this.tile.data.multi = reactive({this.category.tile.data.multi() %>%
+      filter(annotation == input$Annotation & category == input$Category & domain.level == input$ecod_group) })
+  progress$inc(100, detail = "Done")
   
   isValid_input <- reactive({
     not.nulls = !is.null(input$Category) &  !is.null(input$Annotation) & !is.null(input$ecod_group)
@@ -178,7 +204,7 @@ server <- shinyServer(function(input, output, session) {
     
     output$domainplot <- renderGirafe({ 
       if(isValid_input()){ 
-        
+        #print(head(this.tile.data()))
         gg_rect = Show.Domain.Position.Within.Data(
           this.tile.data(),
           colm.any.domain(), 
@@ -202,7 +228,7 @@ server <- shinyServer(function(input, output, session) {
     
     output$domainplotsimplified <- renderGirafe({ 
       if(isValid_input()){ 
-        
+        #print(this.tile.data.multi())
         gg_rect = Show.Domain.Position.Within.Data(
           this.tile.data.multi(),
           colm.any.domain(), 
@@ -285,7 +311,6 @@ server <- shinyServer(function(input, output, session) {
       qnames.with.any.domain.shared.between.annotations = second.annotation.tile.data() %>% 
         inner_join(domains.shared.between.both.annotations()) %>%
         distinct(qname)
-      #print(domains.shared.between.both.annotations())
       tiles =  second.annotation.tile.data() %>%
         inner_join(qnames.with.any.domain.shared.between.annotations)
       return(tiles)
@@ -315,7 +340,7 @@ server <- shinyServer(function(input, output, session) {
     
     
     output$domainplotfromotherannotations <- renderGirafe({ 
-      if(isValid_input()){ 
+      if(isValid_input() & !(is.null(input$second.Annotation))){ 
 
         gg_rect = Show.Domain.Position.Within.Data(
           second.annotation.qname.data.where.domain.shared.with.first.annotation(),
@@ -339,7 +364,7 @@ server <- shinyServer(function(input, output, session) {
 
 
     output$domainplotsharedwithotherannotations <- renderGirafe({ 
-      if(isValid_input()){ 
+      if(isValid_input() & !is.null(input$second.Annotation)){ 
 
         
         gg_rect = Show.Domain.Position.Within.Data(
