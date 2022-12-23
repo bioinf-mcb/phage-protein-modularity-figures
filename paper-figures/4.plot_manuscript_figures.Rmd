@@ -248,7 +248,7 @@ p=ggplot(recent_HGT_pairs_raw.domain.data.to.plot.all.pident70) + geom_col(aes(x
   scale_y_sqrt(breaks = c(2,10,25,50,100,150)) +
   xlab("") +
   ylab("Num. protein pairs")
-ggsave(sprintf("%sFigure_Supplementary/recent_HGT_domains_pident70.jpg", OUTPUT.FIGURES.PATH), p, width = 15, height = 7)
+ggsave(sprintf("%sFigure_Supplementary/recent_HGT_domains_pident70.pdf", OUTPUT.FIGURES.PATH), p, width = 15, height = 7)
 
 
 recent_HGT_pairs_raw.domain.data.to.plot.all.pident90 = read.csv(sprintf("%sFigure_Supplementary/recent_HGT_domains.pident90.csv", OUTPUT.FIGURES.PATH))
@@ -264,7 +264,7 @@ p=ggplot(recent_HGT_pairs_raw.domain.data.to.plot.all.pident90) + geom_col(aes(x
   scale_y_sqrt(breaks = c(2,10,25,50,100,150)) +
   xlab("") +
   ylab("Num. protein pairs")
-ggsave(sprintf("%sFigure_Supplementary/recent_HGT_domains_pident90.jpg", OUTPUT.FIGURES.PATH), p, width = 15, height = 7)
+ggsave(sprintf("%sFigure_Supplementary/recent_HGT_domains_pident90.pdf", OUTPUT.FIGURES.PATH), p, width = 15, height = 7)
 ```
 
 

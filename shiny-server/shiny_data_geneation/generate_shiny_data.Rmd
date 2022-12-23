@@ -2,7 +2,7 @@
 
 ```{r}
 # run config 
-source("~/MGG Dropbox/Projects/divRBP/paper-figures/scripts/1.config.R")
+source("~/MGG Dropbox/Projects/divRBP/code/protein-mosaicism/paper-figures/1.config.R")
 #run  prepare tables
 SHINY_DATA_PATH = "/Users/bognasmug/MGG Dropbox/Projects/divRBP/shiny-server/Phage.Domain.Lookup/data/"
 
@@ -17,16 +17,11 @@ surely.annotated.proteins = surely.annotated.proteins.including.multi.annot %>% 
 ```
 
 ```{r}
-surely.annotated.ecod.domains = ecod.domains.hits %>% 
-  select(qname, qstart, qend, qlength, sstart, send, slength, x_id, h_id, t_id, f_id, minimum.prob) %>%
+surely.annotated.ecod.domains.high.confidence = ecod.domains.hits %>% 
+  select(qname, qstart, qend, qlength, sstart, send, slength, x_id, h_id, t_id, f_id) %>%
   # note that some families may be unclassified i.e. d_id = NA
   inner_join(surely.annotated.proteins)  %>%  # take the conservatively defined domains onlu
-  inner_join(included.category.sizes, by = c("annotation.index", "annotation", "category", "structural", "annotation.coverage")) 
-
-
-surely.annotated.ecod.domains.high.confidence =  surely.annotated.ecod.domains %>%
-  filter(minimum.prob == MINIMUM.PROB.FOR.DOMAIN) %>%
-  select(-minimum.prob) 
+  inner_join(included.category.sizes, by = c("annotation.index", "annotation", "category")) 
 ```
 
 
@@ -102,6 +97,5 @@ for (this.category in unique(surely.annotated.ecod.domains.high.confidence$categ
     data.table::fwrite(tile.data.multi, sprintf("%smultiple_domains.domain.positions.txt", SHINY_DATA_PATH))
     data.table::fwrite(tile.data, sprintf("%sdomain.positions.txt", SHINY_DATA_PATH))
 
-      
 
 ```
