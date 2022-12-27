@@ -90,8 +90,7 @@ rm(ecod.domain.hits.raw)
 seq.lengths = data.table::fread(REPR.SEQ.LENGTH.FILENAME)
 protein.similarity.data.raw = read.csv(PROFILE.SIMILARITY.TABLE,header = TRUE) 
 protein.similarity.data = protein.similarity.data.raw %>%
-  # TODO: delete when we use the original file
-  select(qname = query, sname = subject, prob, scov, qcov, pident) %>%
+  select(qname, sname, prob, scov, qcov, pident) %>%
   left_join(seq.lengths %>% select(qname = name, qlength = length)) %>%
   left_join(seq.lengths %>% select(sname = name, slength = length))  %>%
   mutate(q.hit.length = qlength*qcov,
@@ -139,8 +138,6 @@ repr.seq.lengths = data.table::fread(file = sprintf("%sprot-families/representat
 qnames.with.no.family = setdiff(repr.seq.lengths$name, families$qname)
 families.singletons = data.frame(qname = qnames.with.no.family) %>% mutate(family = paste0("fam", 1+length(families.raw):length(families.raw)+length(qnames.with.no.family)))
 families = rbind(families, families.singletons)
-
-#families = data.table::fread(FAMILIES.FILEPATH) %>% select(qname = members, family)
 data.table::fwrite(families, file = sprintf("%sfamilies.txt", OUTPUT.DATA.PATH))
 
 

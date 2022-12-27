@@ -63,12 +63,9 @@ MAIN.COVS.FOR.ANNOTATION = sort(MAIN.COVS.FOR.ANNOTATION)
 source(sprintf("%scode/protein-mosaicism/paper-figures/helpers.R", PROJECT.PATH))
 DATA.PATH = sprintf("%s/phage-pp-workdir-refseq-hhblits/output/", PROJECT.PATH)
 
-# TO DO: CHANGE IT BACK TO MAIN CLUSTER PROJECT ONCE IT IS CORRECT
-#FAMILIES.FILEPATH = "/Users/bognasmug/MGG Dropbox/Projects/divRBP/rafals-figures/data/families/family-table.txt"  #"/Users/bognasmug/MGG Dropbox/Bogna Smug/Projects/divRBP/phage-pp-workdir-refseq-hhblits/output/prot-families/families/families/dataset-full/family-table.txt"
+# families
 FAMILIES.RAW.FILEPATH = sprintf("%sprot-families/families/dataset-full/mcl/repr-hits-pairwise-prob95-cov80-mcl.out", DATA.PATH)
-#PROFILE.SIMILARITY.TABLE = sprintf("%sprot-families/families/dataset-full/repr-hits-pairwise-prob50.csv", DATA.PATH)
-PROFILE.SIMILARITY.TABLE = "/Users/bognasmug/MGG Dropbox/Projects/divRBP/rafals-figures/data/families/table_qcov-scov_all.txt"
-
+PROFILE.SIMILARITY.TABLE = sprintf("%sprot-families/families/dataset-full/repr-hits-pairwise-prob50.csv", DATA.PATH)
 
 # all vs all / recent HGT pairs
 HHALIGN_RECENT_MOSAICISM_PATH = sprintf("%sprot-families/all-by-all/hhblits/table-hhr-hgt-hhalign.txt", DATA.PATH)
