@@ -905,6 +905,7 @@ data.table::fwrite(filtered.protein.similarity.data, sprintf("%sFigure_Supplemen
 MIN.NUM = 3
 aa=all.proteins %>%
   inner_join(surely.annotated.proteins.from.included.categories) %>%
+  anti_join(unspecific.annotation.indices) %>%
   group_by(annotation.index) %>%
   summarise(domain.signal = sum(mosaic.domain))
 
