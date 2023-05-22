@@ -1,5 +1,44 @@
+# check if cds are ok
+aaletters = str_split("ABCDEFGHIKLMNPQRSTUVWYZ", "") %>% unlist()
+aalettersstr = sprintf("[%s]", paste0(c(aaletters, tolower(aaletters)), sep = "", collapse = ""))
+all.cds = seqinr::read.fasta("/Users/bognasmug/MGG Dropbox/Projects/divRBP/phage-pp-workdir-refseq-hhblits/input/coding-seqs/cds-aa.fa", as.string= TRUE)
+name.table = read.table(NAME_TABLE_PATH, sep = ",", header = TRUE)
+
+num.unaccepted.chars.in.sequences = lapply(all.cds, CheckAAcode) 
+num.unaccepted.chars.in.sequences.df = num.unaccepted.chars.in.sequences %>% stack()
+names(num.unaccepted.chars.in.sequences.df) = c("num.unaccepted.chars", "ncbi.id")
+which(num.unaccepted.chars.in.sequences.df > 0) %>% length()
+annotated.reprseq.with.unallowed.chars = num.unaccepted.chars.in.sequences.df %>%
+  left_join(name.table %>% select(ncbi.id, qname = repr.name)) 
+# qnames where the any member of the cluster  has too many "X" in the sequnce
+unaccepted.genes = annotated.reprseq.with.unallowed.chars  %>% 
+  filter(num.unaccepted.chars.in.sequences > ACCEPTED.NUM.UNKNOWN.AA) 
+data.table::fwrite(unaccepted.genes, file = sprintf("%sunaccepted.genes.txt",OUTPUT.DATA.PATH))
+
+
 
 ######################################### ANNOTATIONS ########################################################
+# families
+#families.raw = readLines(FAMILIES.RAW.FILEPATH) %>%
+#  stringi::stri_split_lines() %>%
+#  lapply(FUN = function(x) {unlist(strsplit(x, split = "\t"))})
+#names(families.raw) = paste0("fam", 1:length(families.raw))
+#families = families.raw %>% stack()
+#names(families) = c("qname", "family")
+#repr.seq.lengths = data.table::fread(file = sprintf("%sprot-families/representative/repr-seqs-lengths.txt", DATA.PATH))
+#qnames.with.no.family = setdiff(repr.seq.lengths$name, families$qname)
+#families.singletons = data.frame(qname = qnames.with.no.family) %>% mutate(family = paste0("fam", 1+length(families.raw):length(families.raw)+length(qnames.with.no.family)))
+#families = rbind(families, families.singletons) %>%
+#  filter(!(qname %in% unaccepted.genes$qname))
+
+families = data.table::fread(FAMILIES.FILEPATH, header = TRUE) %>%
+  select(family, qname = members) %>%
+  filter(!(qname %in% unaccepted.genes$qname))
+data.table::fwrite(families, file = sprintf("%sfamilies.txt", OUTPUT.DATA.PATH))
+
+
+
+
 # read in our hhr hits to PHROGS, PHROG id tpo annotation mapping, and our custom mapping between old and new categories and annotations
 phrogs.annotation.table = data.table::fread(PHROG.TABLE.PATH) %>% 
   select(phrog, annot, category)
@@ -15,43 +54,61 @@ phrog.classes.manual.mapping = readxl::read_excel(MANUAL.PHROG.CLASS.MAPPING) %>
 # parse the hr table to get phrid ID, hit length, scov, qcov
 hhr.phrog.hits.parsed = Parse.Hhr.Raw.Result(hhr.phrog.hits.raw) %>%
   select(qname, sname, qcov, scov, prob, eval, hit.length) %>%
-  filter(hit.length >= MINIMUM.ALIGNMENT.LENGTH.FOR.ANNOTATION) 
+  filter(hit.length >= MINIMUM.ALIGNMENT.LENGTH.FOR.ANNOTATION) %>%
+  filter(!(qname %in% unaccepted.genes$qname))
 hhr.phrog.hits.parsed$phrog = as.numeric(gsub("phrog_", "", hhr.phrog.hits.parsed$sname))
 
 hhr.phrogs.annotated = hhr.phrog.hits.parsed %>% 
   left_join(phrogs.annotation.table, by = "phrog") %>%
   left_join(phrog.classes.manual.mapping, by = c("annot", "category")) %>%
   distinct(qname, qcov, scov, prob, eval, annotation = funct.new, category = class.new, include) %>%
-  filter(!is.na(annotation) & category != "unknown function")
+  filter(!is.na(annotation) & category != "unknown function") 
 
 data.table::fwrite(hhr.phrogs.annotated, file = sprintf("%shhr.phrogs.annotated.txt",OUTPUT.DATA.PATH))
 rm(hhr.phrog.hits.parsed)
 rm(hhr.phrog.hits.raw)
 
+# Add anti-defense descriptions
+anti_defense_descriptions =read.xlsx(ANTI_DEFENSE_DESCRIPTION_PATH, sheetName = "Anti-defense & related", endRow = 246) %>%
+  rowwise() %>%
+  mutate(accession.short = GetAccessionShort(Accession))
+
+refseq.hits.antidefense = data.table::fread(file = ANTI_DEFENSE_DATA_TABLE_PATH) %>%
+  Parse.Hhr.Raw.Result() %>%
+  select(qname.new = sname, sname.new = qname , qcov.new = scov, scov.new = qcov, prob, eval, hit.length) %>%
+  select(qname = qname.new, sname = sname.new, qcov = qcov.new, scov = scov.new, prob, eval, hit.length) %>%
+  filter(hit.length >= MINIMUM.ALIGNMENT.LENGTH.FOR.ANNOTATION) %>%
+  left_join(anti_defense_descriptions %>% select(sname = accession.short, annotation = annotation)) %>%  
+  mutate(category = "antidefense", include = TRUE) %>%
+  distinct(qname, qcov, scov, prob, eval, annotation, category, include) %>%
+  filter(!(qname %in% unaccepted.genes$qname))
+
 ######################################## ANNOTATIONS ###################################################
-annotation.indexes = hhr.phrogs.annotated %>% 
-  distinct(annotation, category) %>% 
-  arrange(category, annotation) %>%
-  mutate(annotation.index = row_number())
+hhr.annotated = hhr.phrogs.annotated %>% 
+  rbind(refseq.hits.antidefense)
 
-relaxely.annotated.proteins.including.multi.annot = GetPhrogAnnotationsData(hhr.phrogs.annotated, annotation.indexes, min.cov = MAIN.COVS.FOR.ANNOTATION[1], min.prob = DEFAULT.MINIMUM.PROB.FOR.ANNOTATION, min.eval = DEFAULT.NAXIMUM.EVAL.FOR.ANNOTATION)
-mid.annotated.proteins.including.multi.annot = GetPhrogAnnotationsData(hhr.phrogs.annotated, annotation.indexes, min.cov = MAIN.COVS.FOR.ANNOTATION[2], min.prob = DEFAULT.MINIMUM.PROB.FOR.ANNOTATION, min.eval = DEFAULT.NAXIMUM.EVAL.FOR.ANNOTATION)
-surely.annotated.proteins.including.multi.annot = GetPhrogAnnotationsData(hhr.phrogs.annotated, annotation.indexes, min.cov = MAIN.COVS.FOR.ANNOTATION[3], min.prob = DEFAULT.MINIMUM.PROB.FOR.ANNOTATION, min.eval = DEFAULT.NAXIMUM.EVAL.FOR.ANNOTATION)
+manual.indices = data.frame(
+  annotation = c("unknown", "antidefense"),
+  category = c("unknown", "antidefense"),
+  annotation.index = c(UNKNOWN.ANNOTATION.INDEX, GENERAL.ANTIDEFENSE.ANNOTATION.INDEX))
 
+annotation.indices = 
+  rbind(
+    hhr.annotated %>%
+      distinct(annotation, category) %>% 
+      arrange(category, annotation) %>%
+      mutate(annotation.index = row_number()),
+    manual.indices)
+
+relaxely.annotated.proteins.including.multi.annot = GetPhrogAnnotationsData(hhr.annotated, annotation.indices, min.cov = MAIN.COVS.FOR.ANNOTATION[1], min.prob = DEFAULT.MINIMUM.PROB.FOR.ANNOTATION, min.eval = DEFAULT.NAXIMUM.EVAL.FOR.ANNOTATION)
+mid.annotated.proteins.including.multi.annot = GetPhrogAnnotationsData(hhr.annotated, annotation.indices, min.cov = MAIN.COVS.FOR.ANNOTATION[2], min.prob = DEFAULT.MINIMUM.PROB.FOR.ANNOTATION, min.eval = DEFAULT.NAXIMUM.EVAL.FOR.ANNOTATION)
+surely.annotated.proteins.including.multi.annot = GetPhrogAnnotationsData(hhr.annotated, annotation.indices, min.cov = MAIN.COVS.FOR.ANNOTATION[3], min.prob = DEFAULT.MINIMUM.PROB.FOR.ANNOTATION, min.eval = DEFAULT.NAXIMUM.EVAL.FOR.ANNOTATION)
+
+data.table::fwrite(annotation.indices, file = sprintf("%sannotation.indices",OUTPUT.DATA.PATH))
+data.table::fwrite(hhr.annotated, file = sprintf("%shhr.annotated",OUTPUT.DATA.PATH))
 data.table::fwrite(surely.annotated.proteins.including.multi.annot, file = sprintf("%ssurely.annotated.proteins.including.multi.annot",OUTPUT.DATA.PATH))
 data.table::fwrite(relaxely.annotated.proteins.including.multi.annot, file = sprintf("%srelaxely.annotated.proteins.including.multi.annot",OUTPUT.DATA.PATH))
 data.table::fwrite(mid.annotated.proteins.including.multi.annot, file = sprintf("%smid.annotated.proteins.including.multi.annot",OUTPUT.DATA.PATH))
-
-# We only include categories that have MIN.NUM.PROT (including the proteins with multiple annotation) as defined at high coverage threshold
-included.category.sizes = surely.annotated.proteins.including.multi.annot %>%
-  filter(include == "TRUE") %>%
-  group_by(annotation.index, annotation, category) %>%
-  summarise(num.seq.per.annotation = n_distinct(qname[num.annots == 1]),
-            num.seq.per.annotation.including.multi.annot = n_distinct(qname)) %>%
-  ungroup()  %>%
-  filter(num.seq.per.annotation.including.multi.annot >= MIN.NUM.PROT) %>%
-  select(-num.seq.per.annotation.including.multi.annot)
-data.table::fwrite(included.category.sizes, file = sprintf("%sincluded.category.sizes",OUTPUT.DATA.PATH))
 
 
 ########################################### ECOD DOMAIN HITS ####################################
@@ -79,7 +136,8 @@ ecod_id_to_names_map = Get.Ecod.Id.To.Name.Map(ecod.annotation.map)
 data.table::fwrite(ecod_id_to_names_map, file = sprintf("%secod_id_to_names_map.txt",OUTPUT.DATA.PATH))
 
 ecod.domains.hits = ecod.domain.hits.all  %>%
-  left_join(ecod.annotation.map, by = c("domain"))  
+  left_join(ecod.annotation.map, by = c("domain"))  %>%
+  filter(!(qname %in% unaccepted.genes$qname))
 # THIS MAY BE COMMENTED OUT
 #ecod.domains.hits = ecod.domains.hits[!grepl("DEAD", ecod.domains.hits$f_name)]
 data.table::fwrite(ecod.domains.hits, file = sprintf("%secod.domains.hits.txt",OUTPUT.DATA.PATH))
@@ -88,19 +146,21 @@ rm(ecod.domain.hits.raw)
 
 ###################################### PAIRWISE HITS AND SEQUENCE MOSAICISM ##################################
 seq.lengths = data.table::fread(REPR.SEQ.LENGTH.FILENAME)
-protein.similarity.data.raw = read.csv(PROFILE.SIMILARITY.TABLE,header = TRUE) 
+protein.similarity.data.raw = read.csv(PROFILE.SIMILARITY.TABLE,header = TRUE)  %>%
+  rename(qname = query, sname = subject)
 protein.similarity.data = protein.similarity.data.raw %>%
-  select(qname, sname, prob, scov, qcov, pident) %>%
+  select(qname, sname, prob, pident, scov.min, qcov.min, scov.max, qcov.max, max.cov, min.cov) %>%
   left_join(seq.lengths %>% select(qname = name, qlength = length)) %>%
   left_join(seq.lengths %>% select(sname = name, slength = length))  %>%
-  mutate(q.hit.length = qlength*qcov,
-         s.hit.length = slength*scov) %>%
+  mutate(q.hit.length = qlength*qcov.min,
+         s.hit.length = slength*scov.min) %>%
+  filter(!(qname %in% unaccepted.genes$qname) & !(sname %in% unaccepted.genes$qname)) %>%
   as.data.table()
-protein.similarity.data[, hit.length := pmin(s.hit.length, q.hit.length)]
-protein.similarity.data[, max.cov := pmax(scov, qcov, na.rm = TRUE)]
+#protein.similarity.data[, hit.length := pmin(s.hit.length, q.hit.length)]
+#protein.similarity.data[, max.cov := pmax(scov, qcov, na.rm = TRUE)]
 protein.similarity.data[, min.hit.len := pmin(q.hit.length, s.hit.length, na.rm = TRUE)]
-
 protein.similarity.data = protein.similarity.data %>%
+  # max.cov is max(max.scov, max.qcov)
   mutate(not.similar = max.cov <= MINIMUM.COV.FOR.PROTEIN.SIMILARITY,
          share.any.fragment = (prob >= MINIMUM.PROB.FOR.PAIRWISE.HIT/100 & 
                                  min.hit.len >= MIN.HIT.LENGTH)) %>%
@@ -116,75 +176,26 @@ protein.similarity.data = protein.similarity.data %>%
          mosaic.pident50 = share.a.fragment.pident50 & not.similar,
          mosaic.pident70 = share.a.fragment.pident70 & not.similar,
          mosaic.pident90 = share.a.fragment.pident90 & not.similar)
+
+
 data.table::fwrite(protein.similarity.data, file = sprintf("%sprotein.similarity.data.txt",OUTPUT.DATA.PATH))
 
+protein.similarity.data.pident.above.30.pc = protein.similarity.data %>% 
+  filter(pident >= 0.3) %>%
+  mutate(reprseq.pair = CreatePair(qname, sname, collapse = "&"))
+data.table::fwrite(protein.similarity.data.pident.above.30.pc, file = sprintf("%sprotein.similarity.data.pident.above.30.pc.txt",OUTPUT.DATA.PATH))
 
 
-###################################### OTHER ##################################
-# raw pairwise hits
-hhr.table.filename = sprintf("%s/prot-families/all-by-all/hhblits/table-hhr.txt", DATA.PATH)
-table.hhr = data.table::fread(hhr.table.filename) %>%
-  data.table::setkey()
 
-
-# families
-families.raw = readLines(FAMILIES.RAW.FILEPATH) %>%
-  stringi::stri_split_lines() %>%
-  lapply(FUN = function(x) {unlist(strsplit(x, split = "\t"))})
-names(families.raw) = paste0("fam", 1:length(families.raw))
-families = families.raw %>% stack()
-names(families) = c("qname", "family")
-repr.seq.lengths = data.table::fread(file = sprintf("%sprot-families/representative/repr-seqs-lengths.txt", DATA.PATH))
-qnames.with.no.family = setdiff(repr.seq.lengths$name, families$qname)
-families.singletons = data.frame(qname = qnames.with.no.family) %>% mutate(family = paste0("fam", 1+length(families.raw):length(families.raw)+length(qnames.with.no.family)))
-families = rbind(families, families.singletons)
-data.table::fwrite(families, file = sprintf("%sfamilies.txt", OUTPUT.DATA.PATH))
-
-
-# cluste sizes
+# cluste sizes: 
 clustering = read.table(CLUSTERING_RESULTS_PATH)
 names(clustering) = c('cluster', 'seq')
 prot.names = read.table(PROTEIN_NAMES_MAPPING_PATH, sep = ",", header = TRUE) 
 names(prot.names) = c("qname", "cluster")
 cluster.sizes = clustering %>%
-  left_join(prot.names, by = 'cluster') %>%
+  left_join(prot.names, by = 'cluster')  %>%
+  filter(!(qname %in% unaccepted.genes$qname)) %>%
   group_by(qname) %>%
-  summarise(n.prot.in.reprseq = n_distinct(seq))
+  summarise(n.prot.in.reprseq = n_distinct(seq)) 
 data.table::fwrite(cluster.sizes, file = sprintf("%snum.prot.in.reprseq.txt", OUTPUT.DATA.PATH))
-
-
-
-# recent mosaic pairs: read hhalign results and check if they are indeed mosaic
-# there is always just one hit per (qname, sname)
-recent.mosaicism.hhr = data.table::fread(file = HHALIGN_RECENT_MOSAICISM_PATH) %>%
-  rowwise() %>%
-  mutate(pair = paste(sort(c(qname, sname)), collapse = " AND ", sep = "")) %>%
-  as.data.table()
-multiple.hits.data = recent.mosaicism.hhr %>% group_by(pair) %>% summarise(n = n()) %>% filter(n > 1)
-if (nrow(multiple.hits.data) > 0 ) {print("There are multiple hits per pairin hhalign data.")}
-
-recent.mosaicism.hhr = recent.mosaicism.hhr[,q.hit.length := (as.numeric(qend) - as.numeric(qstart) + 1)]
-recent.mosaicism.hhr = recent.mosaicism.hhr[,s.hit.length := (as.numeric(send) - as.numeric(sstart) + 1)]
-recent.mosaicism.hhr = recent.mosaicism.hhr[,qcov := q.hit.length/as.numeric(qlength)]
-recent.mosaicism.hhr = recent.mosaicism.hhr[,scov := s.hit.length/as.numeric(slength)]
-recent.mosaicism.hhr = recent.mosaicism.hhr[, max.cov := pmax(qcov,scov)]
-recent.mosaicism.hhr = recent.mosaicism.hhr[, prob := prob]
-recent.mosaicism.hhr = recent.mosaicism.hhr[, pident := pident/100]
-recent.mosaicism.hhr[, min.hit.len := pmin(q.hit.length, s.hit.length, na.rm = TRUE)]
-recent.mosaicism.hhr = recent.mosaicism.hhr %>%
-  mutate(not.similar = max.cov <= MINIMUM.COV.FOR.PROTEIN.SIMILARITY,
-         share.any.fragment = (prob >= MINIMUM.PROB.FOR.PAIRWISE.HIT & 
-                              min.hit.len >= MIN.HIT.LENGTH)) %>%
-mutate(share.a.fragment.pident10 = share.any.fragment & pident >= 0.1,
-        share.a.fragment.pident30 = share.any.fragment & pident >= 0.3,
-        share.a.fragment.pident50 = share.any.fragment & pident >= 0.5,
-        share.a.fragment.pident70 = share.any.fragment & pident >= 0.7,
-        share.a.fragment.pident90 = share.any.fragment & pident >= 0.9) %>%
-  mutate(
-         mosaic.pident10 = share.a.fragment.pident10 & not.similar,
-         mosaic.pident30 = share.a.fragment.pident30 & not.similar,
-         mosaic.pident50 = share.a.fragment.pident50 & not.similar,
-         mosaic.pident70 = share.a.fragment.pident70 & not.similar,
-         mosaic.pident90 = share.a.fragment.pident90 & not.similar)
-data.table::fwrite(recent.mosaicism.hhr, file = sprintf("%srecent.mosaicism.hhr.txt",OUTPUT.DATA.PATH))
 

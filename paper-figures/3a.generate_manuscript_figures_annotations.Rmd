@@ -1,0 +1,83 @@
+---
+title: "Annotation analysis"
+author: "Bogna Smug"
+date: '2023-05-05'
+output: html_document
+---
+
+```{r setup, include=TRUE}
+hhr.phrogs.annotated = data.table::fread(sprintf("%shhr.phrogs.annotated.txt",OUTPUT.DATA.PATH)) 
+families = data.table::fread(file = sprintf("%sfamilies.txt", OUTPUT.DATA.PATH)) 
+mid.annotated.proteins.including.multi.annot = data.table::fread(sprintf("%smid.annotated.proteins.including.multi.annot",OUTPUT.DATA.PATH)) %>%
+  left_join(families) 
+surely.annotated.proteins.including.multi.annot = data.table::fread( sprintf("%ssurely.annotated.proteins.including.multi.annot",OUTPUT.DATA.PATH))  %>%
+  left_join(families) 
+included.annotation.indexes = surely.annotated.proteins.including.multi.annot %>%
+  group_by(annotation.index, include) %>%
+    summarise(num.proteins.including.multi.annot = n_distinct(qname)) %>%
+  ungroup() %>%
+  filter(num.proteins.including.multi.annot >= MIN.NUM.PROT & include) %>%
+  distinct(annotation.index)
+dir.create(sprintf("%sFigure_Supplementary/tradeoff/", OUTPUT.FIGURES.PATH), recursive = TRUE)
+dir.create(sprintf("%sFigure_Supplementary/annot_networks/", OUTPUT.FIGURES.PATH), recursive = TRUE)
+```
+
+# Fig 1: ANNOTATION UNCERTAINTY
+```{r, eval = TRUE}
+# NOTE THAT IN FIGURE 1 WE DO NOT RESTRICT OURSELVES TO CATEGORIES THAT ARE BIG ENOUGH
+annotation.uncertainty.data = data.frame(annotation.coverage = character(0), minimum.probability = character(0), maximum.eval = character(0),
+                                         num.prot = integer(0), num.annotated = integer(0), perc.annotated = numeric(0), perc.unique.annotation = numeric(0))
+
+num.proteins = nrow(families)
+annotation.uncertainty.data.prob = Calculate.Annotation.Tradeoff(hhr.phrogs.annotated,
+                                                                 max.eval.range = DEFAULT.NAXIMUM.EVAL.FOR.ANNOTATION, 
+                                                                        min.cov.range = MAIN.COVS.FOR.ANNOTATION, 
+                                                                        min.prob.range = MINIMUM.PROBABILITIES.FOR.ANNOTATION.EXPLORATION,
+                                                                 num.proteins = num.proteins)
+data.table::fwrite(annotation.uncertainty.data.prob, sprintf("%sFigure_Supplementary/tradeoff/Tradeoff_prob.txt", OUTPUT.FIGURES.PATH)) 
+
+annotation.uncertainty.data.cov= Calculate.Annotation.Tradeoff(hhr.phrogs.annotated,
+                                                               max.eval.range = DEFAULT.NAXIMUM.EVAL.FOR.ANNOTATION, 
+                                                                        min.cov.range = MINIMUM.COVERAGES.FOR.ANNOTATION.EXPLORATION, 
+                                                                        min.prob.range = MAIN.PROBS.FOR.ANNOTATION,
+                                                               num.proteins = num.proteins)
+data.table::fwrite(annotation.uncertainty.data.cov, sprintf("%sFigure_Supplementary/tradeoff/Tradeoff_cov.txt", OUTPUT.FIGURES.PATH)) 
+```
+
+```{r}
+# we onlcy consider included categories here to make it easier (i,e the ones we consider in fig 2, 3, 4, we only look at all categories when looking into recent mosaicism)
+included.proteins.mid.annotated =   mid.annotated.proteins.including.multi.annot %>%
+  inner_join(included.annotation.indexes) %>% 
+  distinct(annotation.index, qname)
+
+annotation.netwok.relaxed.threshold = included.proteins.mid.annotated %>%
+  inner_join(included.proteins.mid.annotated, by = "qname") %>%
+  filter(annotation.index.x != annotation.index.y) %>%
+  group_by(annotation.index.x, annotation.index.y) %>%
+  summarise(n = n_distinct(qname)) %>%
+  ungroup() %>%
+  filter(n >= MIN.NUM.SHARED.SEQ.FOR.SHARED.ANNOT.GRAPH) %>%
+  select(from = annotation.index.x, to = annotation.index.y)
+
+
+included.proteins.surely.annotated =   surely.annotated.proteins.including.multi.annot %>%
+  inner_join(included.annotation.indexes) %>% 
+  distinct(annotation.index, qname)
+
+annotation.netwok.default.threshold = included.proteins.surely.annotated %>%
+  inner_join(included.proteins.surely.annotated, by = "qname") %>%
+  filter(annotation.index.x != annotation.index.y) %>%
+  group_by(annotation.index.x, annotation.index.y) %>%
+  summarise(n = n_distinct(qname)) %>%
+  ungroup() %>%
+  filter(n >= MIN.NUM.SHARED.SEQ.FOR.SHARED.ANNOT.GRAPH) %>%
+  select(from = annotation.index.x, to = annotation.index.y)
+
+
+
+data.table::fwrite(annotation.netwok.relaxed.threshold, 
+                   sprintf("%sFigure_Supplementary/annot_networks/annotation.netwok.relaxed.threshold.txt", OUTPUT.FIGURES.PATH))
+data.table::fwrite(annotation.netwok.default.threshold, 
+                   sprintf("%sFigure_Supplementary/annot_networks/annotation.netwok.default.threshold.txt", OUTPUT.FIGURES.PATH))
+
+```

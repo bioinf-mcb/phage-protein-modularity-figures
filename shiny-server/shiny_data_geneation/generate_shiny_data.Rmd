@@ -2,6 +2,7 @@
 
 ```{r}
 # run config 
+#source("~/MGG Dropbox/Projects/divRBP/code/protein-mosaicism/paper-figures/1.config.R")
 source("~/MGG Dropbox/Projects/divRBP/code/protein-mosaicism/paper-figures/1.config.R")
 SHINY_DATA_PATH = "~/MGG Dropbox/Projects/divRBP/code/protein-mosaicism/shiny-server/Phage.Domain.Lookup/data/"
 
@@ -20,7 +21,7 @@ surely.annotated.ecod.domains.high.confidence = ecod.domains.hits %>%
   select(qname, qstart, qend, qlength, sstart, send, slength, x_id, h_id, t_id, f_id) %>%
   # note that some families may be unclassified i.e. d_id = NA
   inner_join(surely.annotated.proteins)  %>%  # take the conservatively defined domains onlu
-  inner_join(included.category.sizes, by = c("annotation.index", "annotation", "category")) 
+  inner_join(included.category.sizes, by = c("annotation.index")) 
 ```
 
 
@@ -88,7 +89,8 @@ for (this.category in unique(surely.annotated.ecod.domains.high.confidence$categ
       rowwise() %>%
       mutate(domain = if_else(domain == "undetected" | domain == "multiple domains", 
                             domain,
-                            paste0(domain_name, " [", domain, "]")))
+                            paste0(domain_name, " [", domain, "]"))) %>%
+      left_join(families, by = "qname")
     
     tile.data.multi = do.call('rbind', tile.data.multi.list) %>%
       left_join(ecod_id_to_names_map %>% 
@@ -99,12 +101,12 @@ for (this.category in unique(surely.annotated.ecod.domains.high.confidence$categ
       rowwise() %>%
       mutate(domain = if_else(domain == "undetected" | domain == "multiple domains", 
                             domain,
-                            paste0(domain_name, " [", domain, "]")))
+                            paste0(domain_name, " [", domain, "]"))) %>%
+      left_join(families, by = "qname")
     
-    saveRDS(tile.data.multi, sprintf("%smultiple_domains.domain.positions.Rds", SHINY_DATA_PATH))
-    saveRDS(tile.data, sprintf("%sdomain.positions.Rds", SHINY_DATA_PATH))
 
-    
+saveRDS(tile.data.multi, sprintf("%smultiple_domains.domain.positions.Rds", SHINY_DATA_PATH))
+saveRDS(tile.data, sprintf("%sdomain.positions.Rds", SHINY_DATA_PATH))
 annnotations.and.categories = tile.data %>% distinct(category, annotation, domain.level)
 saveRDS(annnotations.and.categories, 
         sprintf("%sannnotations.and.categories.Rds", SHINY_DATA_PATH))

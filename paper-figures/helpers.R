@@ -1,3 +1,18 @@
+CreatePair = function(x,y, collapse = "&") {paste(sort(c(unique(x), unique(y))), collapse = collapse)}
+CreatePair = Vectorize(CreatePair)
+
+CheckAAcode = function(cds) {
+  aasequence = as.character(cds)
+  unknown_chars_in_seq = gsub(aalettersstr, "", aasequence)
+  return(nchar(unknown_chars_in_seq))
+}
+
+# antidefense hits
+GetAccessionShort = function(accession) {
+  gsub(" ", "", accession)
+  strsplit(accession, split = "\\.")[[1]][1]
+}
+
 
 Parse.Hhr.Raw.Result = function(hhblits.table) {
   hhblits.table = hhblits.table[,qstart := as.numeric(qstart)]
@@ -345,14 +360,58 @@ GetPhrogAnnotationsData = function(hhr.phrogs.annotated, annotation.indexes, min
     select(qname, annotation.index, annotation, category, include) %>%
     group_by(qname) %>%
     # number of annotations including the excluded ones
-    mutate(num.annots = n_distinct(annotation)) %>%
+    mutate(num.annots = n_distinct(annotation),
+           num.antidefense.annots = n_distinct(annotation[category == "antidefense"])) %>%
     ungroup() 
   return(annotated.proteins.including.multi.annot)
 }
 
 
+GetUniquelyAnnotatedProteins = function(annotated.proteins.including.multi.annot, GENERAL.ANTIDEFENSE.ANNOTATION.INDEX, unspecific.annotation.indices) {
+ 
+  antidefense.proteins = annotated.proteins.including.multi.annot %>%
+    filter(num.antidefense.annots > 0) %>%
+    # only keep the antidefense annotations as they are more explicit
+    filter(category == "antidefense") %>%
+    group_by(qname, family) %>%
+    summarise(annotation.index = if_else(num.antidefense.annots > 1,  as.integer(GENERAL.ANTIDEFENSE.ANNOTATION.INDEX), annotation.index),
+              include = if_else(num.antidefense.annots > 1,  TRUE, include),
+              num.annots = 1) %>%
+    ungroup() %>%
+    select(qname, family, annotation.index, include, num.annots)
+  
+  
+   unspecific.proteins.with.multiple.annotations = annotated.proteins.including.multi.annot %>%
+      # the ones with antidefense annot were dealed with above
+      inner_join(unspecific.annotation.indices) %>%
+      filter(num.antidefense.annots == 0 & num.annots > 1) %>%
+      distinct(qname) %>%
+      left_join(annotated.proteins.including.multi.annot) %>%
+      # get rid of unspecific annotations
+      anti_join(unspecific.annotation.indices) %>%
+      group_by(qname) %>%
+      # now we count the number of specific annotations 
+      mutate(num.annots = n_distinct(annotation.index)) %>%
+      ungroup() %>%
+      select(qname, family, annotation.index, include, num.annots)
+  
 
-Calculate.Annotation.Tradeoff = function(hhr.phrogs.annotated, max.eval.range, min.cov.range, min.prob.range) {
+  annotated.proteins = 
+    annotated.proteins.including.multi.annot %>% 
+    anti_join(antidefense.proteins %>% select(qname), by = "qname") %>%
+    anti_join(unspecific.proteins.with.multiple.annotations %>% select(qname), by = "qname")%>%
+    select(qname, family, annotation.index, include, num.annots) %>%
+    rbind(antidefense.proteins) %>%
+    rbind(unspecific.proteins.with.multiple.annotations) %>%
+    filter(num.annots == 1) %>%
+    select(qname, annotation.index, family, include)
+
+  return(annotated.proteins)
+}
+
+
+
+Calculate.Annotation.Tradeoff = function(hhr.phrogs.annotated, max.eval.range, min.cov.range, min.prob.range, num.proteins) {
   for (this.eval in max.eval.range)  {
     for (this.cov in min.cov.range)  {
       for (this.prob in min.prob.range) {
@@ -455,49 +514,89 @@ VisualiseIgraphnetwork = function(data.for.network,
   return(p.plot)
 }
 
+Get.Pairs.That.Share.T = function(ecods.across.fold.types.data) {
+  ecods.across.fold.types.data.stripped = ecods.across.fold.types.data %>%
+    select(t_id, fold.type, all.x, num.x)
+  
+  fold.type.pairs.that.share.t = ecods.across.fold.types.data.stripped %>%
+    inner_join(ecods.across.fold.types.data.stripped, by = c("t_id"), relationship = "many-to-many") %>%
+    filter(fold.type.x != fold.type.y) %>%
+    rename('shared_t_id' = 't_id')
+  return(fold.type.pairs.that.share.t)
+}
 
-Calculate.Mosaicism.Per.Fold.Type = function(ecods.across.fold.types.data, all.x.and.t.within.fold.type) {
+Get.Pairs.That.Share.T.And.Disshare.X = function(ecods.across.fold.types.data) {
+  fold.type.pairs.that.share.t = Get.Pairs.That.Share.T(ecods.across.fold.types.data) 
+  fold.type.pairs.that.share.t.and.disshare.x = fold.type.pairs.that.share.t %>%
+    filter(num.x.x > 1 & num.x.y > 1) %>%
+    # now we have fold type pairs that share t
+    # now to each pair add all x and t seen in this fold type
+    # so we will have more rows now: multiple rows per each fold type
+    left_join(ecods.across.fold.types %>% distinct(fold.type, x_id, all.x, annotation.index) %>% select(fold.type.x = fold.type, x.id.x = x_id, annotation.index.x = annotation.index, all.x.within.fold.type.x =all.x)) %>%
+    left_join(ecods.across.fold.types %>% distinct(fold.type, x_id, all.x, annotation.index) %>% select(fold.type.y = fold.type, x.id.y = x_id, annotation.index.y = annotation.index, all.x.within.fold.type.y =all.x)) %>%
+    group_by(fold.type.x, fold.type.y, shared_t_id) %>%
+    mutate(all.x.within.both.fold.types = paste(sort(unique(c(x.id.x, x.id.y))), collapse = " & ")) %>%
+    ungroup() %>%
+    filter(all.x.within.both.fold.types != all.x.within.fold.type.x & all.x.within.both.fold.types != all.x.within.fold.type.y) %>%
+    distinct(shared_t_id, fold.type.x, fold.type.y, shared_t_id, annotation.index.x, annotation.index.y)
+  return(fold.type.pairs.that.share.t.and.disshare.x)
+}
+
+Calculate.Num.Mosaic.Fold.Types = function(ecods.across.fold.types.data) {
+  fold.type.pairs.that.share.t.and.disshare.x = Get.Pairs.That.Share.T.And.Disshare.X(ecods.across.fold.types.data) 
+   mosaic.pairs.num = fold.type.pairs.that.share.t.and.disshare.x %>%
+    distinct(fold.type.x, fold.type.y, annotation.index.x, annotation.index.y) %>%
+    rowwise() %>%
+    mutate(pair = paste(sort(c(fold.type.x, fold.type.y)), collapse = " AND ", sep = "")) %>%
+    group_by(annotation.index.x, annotation.index.y)  %>%
+   summarise(num.mosaic.pairs = n_distinct(pair)) %>%
+   ungroup()
+return(mosaic.pairs.num)
+}
+
+
+
+
+Calculate.Mosaicism.Per.Fold.Type = function(ecods.across.fold.types.data) {
   num.pairs.of.fold.types = ecods.across.fold.types.data %>% 
-    group_by(annotation, category) %>%
+    group_by(annotation.index) %>%
     summarise(num.fold.types = n_distinct(fold.type),
               num.fold.types.with.multi.x = n_distinct(fold.type[num.x > 1])) %>%
     ungroup() %>%
     mutate(num.theoretical.fold.type.pairs = num.fold.types*(num.fold.types-1)/2,
-          num.theoretical.fold.type.pairs.with.multi.x = num.fold.types.with.multi.x*(num.fold.types.with.multi.x-1)/2)
+           num.theoretical.fold.type.pairs.with.multi.x = num.fold.types.with.multi.x*(num.fold.types.with.multi.x-1)/2)
   
-  fold.type.pairs.that.share.t = ecods.across.fold.types.data %>%
-    inner_join(ecods.across.fold.types.data, by = c("annotation", "category", "t_id")) %>%
-    filter(fold.type.x != fold.type.y) %>%
-    left_join(ecods.across.fold.types %>% select(annotation, category, fold.type.x = fold.type, x.id.x = x_id)) %>%
-    left_join(ecods.across.fold.types %>% select(annotation, category, fold.type.y = fold.type, x.id.y = x_id)) 
+  # now look only within category
+  fold.type.pairs.that.share.t = Get.Pairs.That.Share.T(ecods.across.fold.types.data) %>%
+    inner_join(ecods.across.fold.types %>% distinct(fold.type, annotation.index) %>% select(fold.type.x = fold.type, annotation.index)) %>%
+    # join by annotation.index so that we only look within groups
+    inner_join(ecods.across.fold.types %>% distinct(fold.type, annotation.index) %>% select(fold.type.y = fold.type, annotation.index)) 
   
+  fold.type.pairs.that.share.t.and.disshare.x = Get.Pairs.That.Share.T.And.Disshare.X(ecods.across.fold.types.data) %>%
+    inner_join(ecods.across.fold.types %>% distinct(fold.type, annotation.index) %>% select(fold.type.x = fold.type, annotation.index)) %>%
+    # join by annotation.index so that we only look within groups
+    inner_join(ecods.across.fold.types %>% distinct(fold.type, annotation.index) %>% select(fold.type.y = fold.type, annotation.index)) 
+  
+    
   all.fold.type.pairs.sharing.t = fold.type.pairs.that.share.t %>%
-    distinct(fold.type.x, fold.type.y, annotation, category) %>%
+    distinct(fold.type.x, fold.type.y, annotation.index) %>%
     rowwise() %>%
     mutate(pair = paste(sort(c(fold.type.x, fold.type.y)), collapse = " AND ", sep = "")) %>% 
-    group_by(annotation, category)  %>%
+    group_by(annotation.index)  %>%
     summarise(num.pairs.sharing.t = n_distinct(pair)) %>%
     ungroup()
   
-  fold.type.pairs.that.share.t.and.disshare.x = fold.type.pairs.that.share.t %>%
-    filter(num.x.x > 1 & num.x.y > 1) %>%
-    group_by(fold.type.x, fold.type.y, t_id, annotation, category) %>%
-    mutate(all.x.within.both.fold.types = paste(sort(unique(c(x.id.x, x.id.y))), collapse = " & ")) %>%
-    ungroup() %>%
-    left_join(all.x.and.t.within.fold.type %>% select(all.x.within.fold.type.x =all.x, fold.type.x = fold.type)) %>%
-    left_join(all.x.and.t.within.fold.type %>% select(all.x.within.fold.type.y =all.x, fold.type.y = fold.type)) %>%
-    filter(all.x.within.both.fold.types != all.x.within.fold.type.x & all.x.within.both.fold.types != all.x.within.fold.type.y) 
-  
+ 
  mosaic.pairs.num = fold.type.pairs.that.share.t.and.disshare.x %>%
-    distinct(fold.type.x, fold.type.y, annotation, category) %>%
+    distinct(fold.type.x, fold.type.y, annotation.index) %>%
     rowwise() %>%
     mutate(pair = paste(sort(c(fold.type.x, fold.type.y)), collapse = " AND ", sep = "")) %>% 
-    group_by(annotation, category)  %>%
+    group_by(annotation.index)  %>%
     summarise(num.mosaic.pairs = n_distinct(pair)) %>%
     ungroup()
     
   mosaicism.per.fold.type   = ecods.across.fold.types.data %>% 
-    distinct(annotation, category) %>%
+    distinct(annotation.index) %>%
     left_join(mosaic.pairs.num) %>%
     left_join(all.fold.type.pairs.sharing.t) %>%
     left_join(num.pairs.of.fold.types) %>%
@@ -652,7 +751,8 @@ Plot.Domain.Combinations = function(tile.data.object, text.size.axis = 9, text.s
 }
 
 
-Get.Recent.HGT.Domains = function(recent_HGT_pairs_raw, hhr.table, surely.annotated.proteins.from.included.categories, ecod.domains.hits) {
+
+Get.Domain.coverage.In.Recent.HGT = function(recent_HGT_pairs_raw, hhr.table, surely.annotated.proteins.from.included.categories, ecod.domains.hits) {
   qnames.in.recent.HGT = unique(c(recent_HGT_pairs_raw$qname, recent_HGT_pairs_raw$sname))
   hhr.table.filtered = hhr.table %>% 
     filter(qname %in% qnames.in.recent.HGT | sname %in% qnames.in.recent.HGT) %>%
@@ -683,7 +783,7 @@ Get.Recent.HGT.Domains = function(recent_HGT_pairs_raw, hhr.table, surely.annota
   if ( nrow.missing > 1) {
     print(paste0(nrow.missing, " some pairs are missing from hhr table"))
     recent_HGT_pairs_raw.data = recent_HGT_pairs_raw.data %>% filter(!is.na(prob))
-    }
+  }
   
   recent_HGT_pairs_raw.domain.data.raw = recent_HGT_pairs_raw.data %>%
     distinct(qname, sname, qstart, qend) %>%
@@ -697,20 +797,36 @@ Get.Recent.HGT.Domains = function(recent_HGT_pairs_raw, hhr.table, surely.annota
            prop.domain.in.fragment = domain.in.frament.l/dmain.length,
            prop.fragment.covered.by.domain = domain.in.frament.length/fragment.length) %>%
     ungroup()
-  
+
   recent_HGT_pairs_raw.domain.data = recent_HGT_pairs_raw.domain.data.raw %>%
+    rowwise() %>%
+    mutate(pair = paste(sort(c(qname, sname)), collapse = " AND ", sep = "")) %>% 
     filter(detected.domain.within.shared.fragment) %>%
-    group_by(qname, sname,t_id) %>%
-    # we hopefully have just one hit between the rteins that share a fragment with high pident so can assume one row er combination
-    summarise(prop.domain.in.fragment = unique(prop.domain.in.fragment),
-              prop.fragment.covered.by.domain = unique(prop.fragment.covered.by.domain),
-              n = n()) %>%
-    ungroup() %>%
+    group_by(pair, t_id) %>%
+    summarise(
+      # PREVIOUSLY WE USED MEAN!!
+      prop.domain.in.fragment = max(prop.domain.in.fragment, na.rm = TRUE),
+      prop.fragment.covered.by.domain = max(prop.fragment.covered.by.domain, na.rm = TRUE),
+      n = n()) %>%
+    ungroup()
+    
+    # make it symmetric
+    recent_HGT_pairs_raw.domain.data1 = recent_HGT_pairs_raw.domain.data %>% tidyr::separate(col = "pair", into = c("qname", "sname"), sep = " AND ")
+    recent_HGT_pairs_raw.domain.data2 = recent_HGT_pairs_raw.domain.data %>% tidyr::separate(col = "pair", into = c("sname", "qname"), sep = " AND ")
+  
+    recent_HGT_pairs_raw.domain.data.to.return = rbind(recent_HGT_pairs_raw.domain.data1, recent_HGT_pairs_raw.domain.data2) %>%
     left_join(surely.annotated.proteins.from.included.categories %>% select(qname, qannot = annotation))  %>%
     left_join(surely.annotated.proteins.from.included.categories %>% select(sname = qname, sannot = annotation))
+  return(recent_HGT_pairs_raw.domain.data.to.return)
+}
   
   
-  if (nrow( recent_HGT_pairs_raw.domain.data %>% filter(n > 1)) > 0) {print("duplicated entries")}
+  
+Get.Recent.HGT.Domains = function(recent_HGT_pairs_raw, hhr.table, surely.annotated.proteins.from.included.categories, ecod.domains.hits) {
+  recent_HGT_pairs_raw.domain.data = Get.Domain.coverage.In.Recent.HGT(recent_HGT_pairs_raw, hhr.table, surely.annotated.proteins.from.included.categories, ecod.domains.hits)
+  
+  # there should be max 2 hits per pair
+  if (nrow( recent_HGT_pairs_raw.domain.data %>% filter(n > 2)) > 0) {print("duplicated entries")}
   
   recent_HGT_pairs_raw.domain.data.to.plot.all = recent_HGT_pairs_raw.domain.data %>%
     rowwise() %>%
@@ -739,4 +855,206 @@ Get.Recent.HGT.Domains = function(recent_HGT_pairs_raw, hhr.table, surely.annota
     left_join(ecod_id_to_names_map %>% filter(level == "T") %>% select(t_id = id, t_name = name)) 
   
   return(recent_HGT_pairs_raw.domain.data.to.plot.all)
+}
+
+
+
+
+Plot.Domains.Within.Mosaic.Proteins = function(domains.within.proteins.domain.mosaic, colors = NULL) {
+  
+  if (is.null(colors)) {
+    colors = domains.within.proteins.domain.mosaic %>% distinct(t_id) %>% mutate(color = "gray")
+  }
+  
+  domains.within.proteins.with.significant.higher.domain.mosaic = domains.within.proteins.domain.mosaic %>%
+    left_join(colors, by = "t_id") %>%
+    filter(corrected.pval < 0.05) %>%
+    select(t_id, t_name, h_name, mosaic,odds.ratio, corrected.pval, fillcolor = color) %>%
+    arrange(desc(odds.ratio))
+  #write.xlsx(x = domains.within.proteins.with.significant.higher.domain.mosaic, 
+  #           file = sprintf("%stables/Supplementary_table_mosaic_vs_ninmosaic-domain.xlsx", OUTPUT.FIGURES.PATH), 
+  #           sheetName = "Domains in mosaic vs non-mosaic proteins", 
+  #  col.names = TRUE, row.names = TRUE, append = TRUE)
+  
+  
+  included.ecods = domains.within.proteins.with.significant.higher.domain.mosaic %>% 
+    filter(corrected.pval < 0.05) %>%
+    arrange(desc(odds.ratio)) %>%
+    head(20) %>%
+    #filter(freq.q >= 0.025) %>%
+    pull(t_id) %>% unique()
+  
+  ecod.table <- domains.within.proteins.with.significant.higher.domain.mosaic %>% 
+    filter(t_id %in% included.ecods )%>%
+    arrange(mosaic, odds.ratio)
+  
+  ecod.table$t_name = factor(ecod.table$t_name, 
+                             levels = ecod.table %>% filter(mosaic == "Mosaic") %>% arrange(odds.ratio) %>% pull(t_name) %>% unique())
+  #ecod.table$mosaic = factor(ecod.table$mosaic, levels = c("Not mosaic", "Mosaic"))
+  
+  display.h.name <- ecod.table$h_name
+  display.h.name[ecod.table$t_name == ecod.table$h_name] <- "same"
+  display.t.name <- sprintf("%s\n(H: %s)", ecod.table$t_name, display.h.name)
+  
+  
+  p.odds = ggplot(ecod.table %>% distinct(t_name, odds.ratio, fillcolor), aes(x=t_name, y = odds.ratio, fill = fillcolor)) +
+    geom_bar(stat="identity", width = 0.8, col = "black") + 
+    scale_x_discrete(breaks = ecod.table$t_name, labels = display.t.name) +
+    scale_fill_identity() +
+    theme_minimal() + 
+    theme(legend.text=element_text(size=4)) + 
+    labs(x = "", y = "Odds ratio", fill = "category") + 
+    coord_flip() +
+    guides(fill = "none")
+  return(p.odds)
+}
+
+
+Get_Domain_Odss_In_Fold_Types = function(all.fold.types, ecod_id_to_names_map) {
+  all.fold.types.stats = all.fold.types %>%
+    group_by(fold.type.mosaic) %>%
+    mutate(num.this.mosaic.fold.type = n_distinct(fold.type)) %>%
+    group_by(t_id) %>%
+    mutate(num.fold.types.with.this.t = n_distinct(fold.type)) %>%
+    filter(num.fold.types.with.this.t >= 1) %>%
+    group_by(t_id, fold.type.mosaic, num.this.mosaic.fold.type) %>%
+    summarise(num.fold.types.with.this.t = n_distinct(fold.type)) %>%
+    ungroup() %>%
+    tidyr::complete(t_id, fold.type.mosaic, 
+                    fill = list(num.fold.types.with.this.t = 0, num.this.mosaic.fold.type = 0)) %>%
+    mutate(num.fold.types.with.other.t  = num.this.mosaic.fold.type - num.fold.types.with.this.t) %>% 
+    ungroup()
+  
+  all.t.in.fold.types = all.fold.types.stats %>% distinct(t_id)
+  all.t.in.fold.types$pval = NA
+  all.t.in.fold.types$odds.ratio = NA
+  for (this.t.id in unique(all.fold.types.stats$t_id)) {
+    this.t.stats = all.fold.types.stats %>% filter(t_id == this.t.id)
+    M1 = this.t.stats %>% distinct(fold.type.mosaic, num.fold.types.with.this.t, num.fold.types.with.other.t) %>% as.data.table()
+    #domains.within.proteins$pval[which(domains.within.proteins$t_id == this.t.id)] = chisq.test(M1)$p.value
+    all.t.in.fold.types$pval[which(all.t.in.fold.types$t_id == this.t.id)] = fisher.test(M1, alternative = "less")$p.value
+    all.t.in.fold.types$odds.ratio[which(all.t.in.fold.types$t_id == this.t.id)] = (M1$num.fold.types.with.this.t[2]/M1$num.fold.types.with.other.t[2])/(M1$num.fold.types.with.this.t[1]/M1$num.fold.types.with.other.t[1])
+  }
+  
+  all.t.in.fold.types$h.index <- sapply(1:nrow(all.t.in.fold.types), function(index){
+    this.topology <- all.t.in.fold.types$t_id[index]
+    this.topology.h.index <- strsplit(this.topology, ".", fixed = T)[[1]]
+    this.topology.h.index <- this.topology.h.index[-length(this.topology.h.index)]
+    this.topology.h.index <- as.character(paste(this.topology.h.index, collapse = "."))
+  })
+  
+  all.t.in.fold.types = all.t.in.fold.types %>% 
+    left_join(ecod_id_to_names_map %>% filter(level == "H") %>% select(h.index = id, h_name = name)) %>%
+    left_join(ecod_id_to_names_map %>% filter(level == "T") %>% select(t_id = id, t_name = name)) %>%
+    mutate(corrected.pval = pval/nrow(all.t.in.fold.types)) %>%
+    mutate(mosaic = "Mosaic") %>%
+    #filter(pval < 0.05/nrow(all.t.in.fold.types)) %>%
+    arrange(desc(odds.ratio))
+  return(all.t.in.fold.types)
+}
+
+
+
+Get.Mosaicism.Odds.Ratio.Data = function(all.proteins, annotations, diversity.data) {
+  all.proteins.with.any.relaxed.function = all.proteins %>%
+    distinct(qname, mosaic) %>%
+    left_join(annotations) %>%
+    filter(!is.na(annotation.index)) %>%
+    group_by(annotation.index) %>%
+    mutate(num.proteins.in.this.annotation = n_distinct(qname)) %>%
+    ungroup() 
+  
+  num.proteins.per.osaicism.data = all.proteins.with.any.relaxed.function %>%
+    group_by(mosaic) %>%
+    summarise(num.proteins = n_distinct(qname)) %>%
+    ungroup()
+  
+  annot.stats.per.category.and.mosaicism = all.proteins.with.any.relaxed.function %>%
+    inner_join(diversity.data) %>%
+    group_by(annotation.index, mosaic, annotation, category) %>%
+    summarise(num.proteins.with.this.annot = n_distinct(qname)) %>%
+    ungroup() %>%
+    left_join(num.proteins.per.osaicism.data) %>%
+    mutate(num.proteins.with.different.annot = num.proteins - num.proteins.with.this.annot,
+           prop.proteins.has.this.annot = num.proteins.with.this.annot/num.proteins) %>%
+    tidyr::complete(annotation.index, mosaic, fill = list(num.proteins = 0, num.proteins.with.this.annot = 0, num.proteins.with.different.annot = 0, prop.proteins.has.this.annot = NA))
+  
+  
+  
+  annot.stats.per.category.and.mosaicism$pval = NA
+  annot.stats.per.category.and.mosaicism$odds.ratio = NA
+  for (this.annotation.index in unique(annot.stats.per.category.and.mosaicism$annotation.index)) {
+    this.annot.stats = annot.stats.per.category.and.mosaicism %>% filter(annotation.index == this.annotation.index)
+    M1 = this.annot.stats %>% select(mosaic, num.proteins.with.this.annot, num.proteins.with.different.annot) %>% select(num.proteins.with.this.annot, num.proteins.with.different.annot) %>% as.data.table()
+    #  annot.stats.per.category.and.mosaicism$pval[which(annot.stats.per.category.and.mosaicism$annotation.index == this.annotation.index)] = chisq.test(M1)$p.value
+    annot.stats.per.category.and.mosaicism$pval[which(annot.stats.per.category.and.mosaicism$annotation.index == this.annotation.index)] = fisher.test(M1)$p.value
+    annot.stats.per.category.and.mosaicism$odds.ratio[which(annot.stats.per.category.and.mosaicism$annotation.index == this.annotation.index)] = (M1$num.proteins.with.this.annot[2]/M1$num.proteins.with.different.annot[2])/(M1$num.proteins.with.this.annot[1]/M1$num.proteins.with.different.annot[1])
+  }
+  num.comparisons = n_distinct(annot.stats.per.category.and.mosaicism$annotation.index)
+  annot.stats.per.category.and.mosaicism = annot.stats.per.category.and.mosaicism %>%
+    mutate(corrected.pval = pval*num.comparisons)
+  return(annot.stats.per.category.and.mosaicism)
+}
+
+
+GetDomainsWithinMosaicProteins = function(all.proteins, families, ecod.domains.hits, ecod_id_to_names_map) {
+  
+  domains.within.proteins = all.proteins %>%
+    # filter(has.hit.to.anything.in.the.data) %>%
+    left_join(families) %>%
+    inner_join(ecod.domains.hits, by = "qname") %>%
+    group_by(mosaic) %>%
+    mutate(total.num.families.with.any.ecod.hit = n_distinct(family),
+           total.num.proteins.with.any.ecod.hit = n_distinct(qname)) %>%
+    ungroup() %>%
+    distinct(qname, family, t_id, t_name, mosaic, total.num.families.with.any.ecod.hit, total.num.proteins.with.any.ecod.hit) %>%
+    group_by(t_id, t_name, mosaic, total.num.families.with.any.ecod.hit, total.num.proteins.with.any.ecod.hit) %>%
+    summarise(num.families = n_distinct(family),
+              num.proteins.with.this.ecod = n_distinct(qname)) %>%
+    ungroup() %>%
+    mutate(freq = num.families/total.num.families.with.any.ecod.hit,
+           freq.q = num.proteins.with.this.ecod/total.num.proteins.with.any.ecod.hit,
+           num.proteins.other.ecod.hits = total.num.proteins.with.any.ecod.hit - num.proteins.with.this.ecod) %>%
+    tidyr::complete(t_id, mosaic, fill = list(num.proteins.with.this.ecod = 0, num.proteins.other.ecod.hits = 0))
+  
+  
+  domains.within.proteins$h.index <- sapply(1:nrow(domains.within.proteins), function(index){
+    this.topology <- domains.within.proteins$t_id[index]
+    this.topology.h.index <- strsplit(this.topology, ".", fixed = T)[[1]]
+    this.topology.h.index <- this.topology.h.index[-length(this.topology.h.index)]
+    this.topology.h.index <- as.character(paste(this.topology.h.index, collapse = "."))
+  })
+  
+  
+  
+  domains.within.proteins$pval = NA
+  domains.within.proteins$odds.ratio = NA
+  for (this.t.id in unique(domains.within.proteins$t_id)) {
+    this.domain.stats = domains.within.proteins %>% filter(t_id == this.t.id)
+    M1 = this.domain.stats %>% select(mosaic, num.proteins.with.this.ecod, num.proteins.other.ecod.hits) %>% select(num.proteins.with.this.ecod, num.proteins.other.ecod.hits) %>% as.data.table()
+    #domains.within.proteins$pval[which(domains.within.proteins$t_id == this.t.id)] = chisq.test(M1)$p.value
+    domains.within.proteins$pval[which(domains.within.proteins$t_id == this.t.id)] = fisher.test(M1)$p.value
+    domains.within.proteins$odds.ratio[which(domains.within.proteins$t_id == this.t.id)] = (M1$num.proteins.with.this.ecod[2]/M1$num.proteins.other.ecod.hits[2])/(M1$num.proteins.with.this.ecod[1]/M1$num.proteins.other.ecod.hits[1])
+  }
+  
+  num.comparisons = n_distinct(domains.within.proteins$t_id)
+  domains.within.proteins = domains.within.proteins %>%
+    mutate(corrected.pval = pval*num.comparisons)
+  
+  domains.within.proteins = domains.within.proteins %>%
+    left_join(ecod_id_to_names_map %>% filter(level == "H") %>% select(h.index = id, h_name = name)) %>%
+    mutate(mosaic = if_else(mosaic, "Mosaic", "Not mosaic"))
+  return(domains.within.proteins)
+}
+
+Plot.Mosaicism.Table = function(diversity.top, PHROG.COLOR.MAP) {
+  p <- ggplot(diversity.top, aes(y = annotation, x = value, fill = category)) +
+    geom_bar(stat = "identity", position=position_dodge()) +
+    scale_fill_manual(values = PHROG.COLOR.MAP) + theme_minimal() + 
+    theme(strip.text.y = element_text(face = "bold", size = 7, angle = 360)) + 
+    labs(x = "", y = "") +
+    scale_x_continuous(labels=function(x) sprintf("%.2f", x))
+  
+  p.most.diverse <- p + guides(fill = "none")
+  return(p.most.diverse)
 }

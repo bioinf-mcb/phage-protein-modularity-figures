@@ -8,8 +8,6 @@
 #
 library(shinylogs)
 library(shiny)
-#library(ggpubr)
-# Also install data.table, tidyr
 library(R.utils)
 # adding it at the bottom may brak igraph plotting
 library(ggiraph)  
@@ -164,6 +162,7 @@ server <- shinyServer(function(input, output, session) {
   this.tile.data.multi = reactive({this.category.tile.data.multi() %>%
       filter(annotation == input$Annotation & category == input$Category & domain.level == input$ecod_group) })
   progress$inc(100, detail = "Done")
+  #print(head(this.tile.data))
   
   isValid_input <- reactive({
     not.nulls = !is.null(input$Category) &  !is.null(input$Annotation) & !is.null(input$ecod_group)
@@ -203,8 +202,7 @@ server <- shinyServer(function(input, output, session) {
     
     
     output$domainplot <- renderGirafe({ 
-      if(isValid_input()){ 
-        #print(head(this.tile.data()))
+      if(isValid_input()){
         gg_rect = Show.Domain.Position.Within.Data(
           this.tile.data(),
           colm.any.domain(), 

@@ -1,0 +1,1253 @@
+---
+title: "4b plot (old)"
+author: "Bogna Smug"
+date: '2023-05-08'
+output: html_document
+---
+
+########### OLD CODE CALCULATION #############
+################## TO BE DELETED ###################
+
+```{r, eval = FALSE}
+all.potentially.mosaic.pairs =  
+  rbind(seq.mosaic.pairs.all.pident %>% 
+            filter(mosaic) %>%
+            mutate(mosaicism.type = "seq") %>%
+            select(family.pair, reprseq.pair, mosaicism.type), 
+        qname.pairs.sharing.t.and.disshare.x  %>%
+            mutate(mosaicism.type = "ecod") %>%
+            select(family.pair, reprseq.pair, mosaicism.type),
+        seq.mosaic.pairs.all.pident %>% 
+            filter(mosaic.pident50) %>%
+            mutate(mosaicism.type = "recent seq. mosaicism 50% ident") %>%
+            select(family.pair, reprseq.pair, mosaicism.type),
+        seq.mosaic.pairs.all.pident %>% 
+            filter(mosaic.pident30) %>%
+            mutate(mosaicism.type = "recent seq. mosaicism 30% ident") %>%
+            select(family.pair, reprseq.pair, mosaicism.type),
+        seq.mosaic.pairs.all.pident %>% 
+            filter(mosaic.pident70) %>%
+            mutate(mosaicism.type = "recent seq. mosaicism 70% ident") %>%
+            select(family.pair, reprseq.pair, mosaicism.type)) %>%
+  left_join(protein.similarity.data.pident.above.30.pc %>% distinct(reprseq.pair, pident), by = "reprseq.pair") 
+
+```
+
+```{r, eval = FALSE}
+# Only looking at pairs of proteins where both are from the same functional category
+seq.mosaicism.from.various.classes = protein.similarity.data %>%
+  inner_join( surely.annotated.proteins.from.included.categories %>% 
+                distinct(qname, annotation.index) %>% select(qname = qname, annotation.index), by = "qname") %>%
+  # require annotation.indexes to be the same for qname and sname: inner join by it
+  inner_join( surely.annotated.proteins.from.included.categories %>% 
+                distinct(qname, annotation.index) %>% select(sname = qname, annotation.index), by = c("sname", "annotation.index")) %>%
+  group_by(annotation.index) %>%
+  # proportion of pairs that show any similarity not all possible pairs
+  summarise(prop.mosaic.pairs.sequence.thr0p1 = sum(mosaic.pident10)/n(),
+            prop.mosaic.pairs.sequence.thr0p3 = sum(mosaic.pident30)/n(),
+            prop.mosaic.pairs.sequence.thr0p5 = sum(mosaic.pident50)/n()) %>%
+  select(annotation.index, prop.mosaic.pairs.sequence.thr0p1, prop.mosaic.pairs.sequence.thr0p3, prop.mosaic.pairs.sequence.thr0p5)
+
+```
+
+```{r, eval = FALSE}
+# qname.pairs.sharing.t.and.disshare.x only have annotationd from included categories
+all.proteins.with.domain.mosaic.signal.within.specific.class = unique(c(
+  qname.pairs.sharing.t.and.disshare.x %>% 
+   filter(!is.na(annotation.index.from) & !is.na(annotation.index.to)) %>%
+  anti_join(unspecific.annotation.indices %>% select(annotation.index.from = annotation.index)) %>%
+  anti_join(unspecific.annotation.indices %>% select(annotation.index.to = annotation.index)) %>%
+  filter(annotation.index.from == annotation.index.to) %>%
+  pull(qname.x),
+  qname.pairs.sharing.t.and.disshare.x %>% 
+  filter(!is.na(annotation.index.from) & !is.na(annotation.index.to)) %>%
+  anti_join(unspecific.annotation.indices %>% select(annotation.index.from = annotation.index)) %>%
+  anti_join(unspecific.annotation.indices %>% select(annotation.index.to = annotation.index)) %>%
+  filter(annotation.index.from == annotation.index.to) %>%
+  pull(qname.y)))
+
+all.proteins.with.domain.mosaic.signal.to.other.specific.class = unique(c(
+  qname.pairs.sharing.t.and.disshare.x %>% 
+  filter(!is.na(annotation.index.from) & !is.na(annotation.index.to)) %>%
+  anti_join(unspecific.annotation.indices %>% select(annotation.index.from = annotation.index)) %>%
+  anti_join(unspecific.annotation.indices %>% select(annotation.index.to = annotation.index)) %>%
+  filter(annotation.index.from != annotation.index.to) %>%
+  pull(qname.x),
+  qname.pairs.sharing.t.and.disshare.x %>% 
+  filter(!is.na(annotation.index.from) & !is.na(annotation.index.to)) %>%
+  anti_join(unspecific.annotation.indices %>% select(annotation.index.from = annotation.index)) %>%
+  anti_join(unspecific.annotation.indices %>% select(annotation.index.to = annotation.index)) %>%
+  filter(annotation.index.from != annotation.index.to) %>%
+  pull(qname.y)))
+
+all.proteins.with.domain.mosaic.signal.to.unknown.excluded.or.unspecific.class = unique(c(
+  qname.pairs.sharing.t.and.disshare.x %>% 
+  filter(is.na(annotation.index.to) | annotation.index.to %in% unspecific.annotation.indices) %>%
+  pull(qname.x),
+  qname.pairs.sharing.t.and.disshare.x %>% 
+  filter(is.na(annotation.index.from) | annotation.index.from %in% unspecific.annotation.indices) %>%
+  pull(qname.y)))
+```
+
+```{r, eval = FALSE}
+
+fam.quant.threshold = 0.25
+fold.comb.quant.threshold = 0.25
+no.fam.plotting.thr <- as.numeric(quantile(diversity.data0 %>% 
+                                                   #filter(!poorly.ecod.annotated) %>% 
+                                                   pull(num.families), probs = fam.quant.threshold))
+
+#no.ft.plotting.thr <- as.numeric(quantile(diversity.data0 %>% 
+                                                   #filter(!poorly.ecod.annotated) %>% 
+#                                                   pull(num.topology.combinations), probs = fold.comb.quant.threshold))
+
+no.fam.75.quant <- as.numeric(quantile(diversity.data0 %>% 
+                                                   #filter(!poorly.ecod.annotated) %>% 
+                                                   pull(num.families), probs = 0.75))
+#no.ft.75.quant <- as.numeric(quantile(diversity.data0 %>% 
+                                                   #filter(!poorly.ecod.annotated) %>% 
+#                                                   pull(num.topology.combinations), probs = 0.75))
+
+diversity.data = diversity.data0 %>% 
+  mutate(threshold.num.topology.combinations = 0, #no.ft.plotting.thr,
+        threshold.num.fam  = no.fam.plotting.thr) %>%
+  mutate(top.quantile = num.families >= threshold.num.fam & 
+           num.topology.combinations >= threshold.num.topology.combinations #&
+           #!poorly.ecod.annotated
+         ,
+         bottom.quantile =  num.families <= threshold.num.fam &
+           num.topology.combinations <= threshold.num.topology.combinations #& 
+           #!poorly.ecod.annotated
+         ,
+         diverse.for.label = num.families > no.fam.75.quant  
+                                # & num.topology.combinations > no.ft.75.quant
+                                # & !poorly.ecod.annotated
+                                ) %>%
+  mutate(data.type = if_else(top.quantile, "top.diversity",
+                             if_else(bottom.quantile, "low.diversity", 
+                                     if_else(poorly.ecod.annotated, "poorly annotated", "unclear.diversity"))))
+
+data.table::fwrite(diversity.data, sprintf("%sFigure4/diversity.top.diverse.classes.txt", OUTPUT.FIGURES.PATH))
+```
+
+
+
+```{r, eval = FALSE}
+# metadata fro all annotations, not just the included ones, here we will look at the size inluding multiannots
+# otherwise it will be hard to interpret
+category.sizes = surely.annotated.proteins.including.multi.annot %>%
+  left_join(reprseq.function.status) %>%
+  group_by(annotation.index, annotation, category, include) %>%
+  summarise(
+    num.proteins.including.multi.annot = n_distinct(qname),
+    num.families.including.multi.annot = n_distinct(family)) %>%
+  ungroup() %>%
+  as.data.frame() %>%
+  rbind(
+    data.frame(
+      annotation.index = as.integer(UNKNOWN.ANNOTATION.INDEX),
+      annotation = "unknown" , 
+      category = "unknown", 
+      include = FALSE,
+      num.proteins.including.multi.annot = reprseq.function.status %>% filter(has.unknown.function) %>% nrow(),
+      num.families.including.multi.annot = reprseq.function.status %>% filter(has.unknown.function) %>% distinct(family) %>% nrow()))  
+
+node.color.map.all.cat = category.sizes %>% 
+                                      select(annotation.index, category) %>%
+                                      left_join(color.map.df, by = "category") %>%
+                                      select(node = annotation.index, color)
+node.size.map.all.cat = category.sizes %>% 
+                                      mutate(node = annotation.index, size = log(num.families.including.multi.annot) + 1) %>% #size = num.proteins.including.multi.annot/100) %>%
+                                      select(node, size) 
+node.labels.all.cat = category.sizes %>% 
+                                      rowwise() %>%
+                                      mutate(annot = gsub(" ", "\n", annotation)) %>%
+                                      select(node = annotation.index, label = annot)
+included.categories.metadata.all.cat = node.color.map.all.cat %>%
+  inner_join(node.size.map.all.cat, by = "node") %>%
+  inner_join(node.labels.all.cat, by = "node") %>%
+  mutate(color = if_else(label == "unknown", "#808080", color))
+
+
+data.table::fwrite(included.categories.metadata.all.cat, 
+                   sprintf("%sFigure_Supplementary/FigS2_annot_network/included.categories.metadata.all.cat.txt", OUTPUT.FIGURES.PATH))
+```
+
+
+```{r, eval = FALSE}
+# DELETE
+# Make sure we see all pairs
+seq.mosaic.pairs.all.pident.symmetric1 = rbind(
+  seq.mosaic.pairs.all.pident %>%
+  select(reprseq.pair, family.pair, qname.x = qname, qname.y = sname, family.x = qfamily, family.y = sfamily,  mosaic, mosaic.pident10, mosaic.pident50, mosaic.pident30, mosaic.pident70, mosaic.pident90, reprseq.pair, family.pair, annotation.index.x = annotation.index.from, annotation.index.y = annotation.index.to),
+  seq.mosaic.pairs.all.pident %>%
+  select(reprseq.pair, family.pair, qname.y = qname, qname.x = sname, family.y = qfamily, family.x = sfamily,  mosaic, mosaic.pident10, mosaic.pident50, mosaic.pident30, mosaic.pident70, mosaic.pident90, reprseq.pair, family.pair, annotation.index.y = annotation.index.from, annotation.index.x = annotation.index.to)) %>%
+  group_by(qname.x, qname.y, family.x, family.y, reprseq.pair, family.pair, annotation.index.x, annotation.index.y) %>%
+  summarise(mosaic.pident30 = any(mosaic.pident30, na.rm = TRUE),
+            mosaic.pident50 = any(mosaic.pident50, na.rm = TRUE),
+            mosaic.pident70 = any(mosaic.pident70, na.rm = TRUE),
+            mosaic.pident10 = any(mosaic.pident10, na.rm = TRUE),
+            mosaic.pident90 = any(mosaic.pident90, na.rm = TRUE),
+            mosaic = any(mosaic, na.rm = TRUE)) %>%
+  select(reprseq.pair, family.pair, qname.y, qname.x, family.y, family.x,  mosaic, mosaic.pident10, mosaic.pident50, mosaic.pident30, mosaic.pident70, mosaic.pident90, reprseq.pair, family.pair, annotation.index.y, annotation.index.x) %>%
+  arrange(reprseq.pair, qname.y, qname.x)
+CheckSymmetry(seq.mosaic.pairs.all.pident.symmetric1, 'qname.x', 'qname.y')
+CheckSymmetry(seq.mosaic.pairs.all.pident.symmetric, 'qname.x', 'qname.y')
+
+
+
+seq.mosaic.pairs.all.pident.symmetric = rbind(
+    seq.mosaic.pairs.all.pident %>% 
+      select(reprseq.pair, family.pair, mosaic, mosaic.pident10, mosaic.pident50, mosaic.pident30, mosaic.pident70, mosaic.pident90) %>%
+      tidyr::separate(col = reprseq.pair, into = c('qname.x', 'qname.y'), sep = "&", remove = FALSE) %>%
+      left_join(surely.annotated.proteins.from.included.categories %>% select(qname.x = qname, annotation.index.x = annotation.index)) %>%
+      left_join(surely.annotated.proteins.from.included.categories %>% select(qname.y = qname, annotation.index.y = annotation.index)) %>%
+      left_join(families %>% select(qname.x = qname, family.x = family)) %>%
+      left_join(families %>% select(qname.y = qname, family.y = family)),
+    seq.mosaic.pairs.all.pident %>% 
+      select(reprseq.pair, family.pair, mosaic, mosaic.pident10, mosaic.pident50, mosaic.pident30, mosaic.pident70, mosaic.pident90) %>%
+      tidyr::separate(col = reprseq.pair, into = c('qname.y', 'qname.x'), sep = "&", remove = FALSE) %>%
+      left_join(surely.annotated.proteins.from.included.categories %>% select(qname.x = qname, annotation.index.x = annotation.index)) %>%
+      left_join(surely.annotated.proteins.from.included.categories %>% select(qname.y = qname, annotation.index.y = annotation.index)) %>%
+      left_join(families %>% select(qname.x = qname, family.x = family)) %>%
+      left_join(families %>% select(qname.y = qname, family.y = family))) %>%
+      select(reprseq.pair, family.pair, qname.y, qname.x, family.y, family.x,  mosaic, mosaic.pident10, mosaic.pident50, mosaic.pident30, mosaic.pident70, mosaic.pident90, reprseq.pair, family.pair, annotation.index.y, annotation.index.x) %>%
+  distinct() %>%
+  arrange(reprseq.pair, qname.y, qname.x)
+```
+
+
+```{r, eval = FALSE}
+
+
+mosaic.pairs.by.ecod.and.seq.from.top.diverse = qname.pairs.sharing.t.and.disshare.x %>%
+  filter(annotation.index.from == annotation.index.from) %>%
+  rename(annotation.index = annotation.index.from) %>%
+  inner_join(included.annotation.indices) %>%
+  left_join(seq.mosaic.pairs.all.pident %>% 
+              select(reprseq.pair, mosaic.pident10, mosaic.pident30, mosaic.pident50, mosaic.pident70, mosaic.pident90), 
+            by = c("reprseq.pair")) %>%
+  group_by(reprseq.pair, annotation.index) %>%
+  summarise(mosaic.pident10 = any(mosaic.pident10),
+            mosaic.pident30 = any(mosaic.pident30),
+            mosaic.pident50 = any(mosaic.pident50),
+            mosaic.pident70 = any(mosaic.pident70),
+            mosaic.pident90 = any(mosaic.pident90)) %>%
+  right_join(diversity.data %>% filter(top.quantile)) %>%
+  group_by(annotation.index, annotation, category) %>%
+  # here we have one row per reprseq pair
+  summarise(num.reprseq.pairs.mosaic.by.domain  = n(),
+            num.reprseq.pairs.mosaic.by.domain.and.pident10 = sum(mosaic.pident10, na.rm = TRUE),
+            num.reprseq.pairs.mosaic.by.domain.and.pident30 = sum(mosaic.pident30, na.rm = TRUE),
+            num.reprseq.pairs.mosaic.by.domain.and.pident50 = sum(mosaic.pident50, na.rm = TRUE),
+            num.reprseq.pairs.mosaic.by.domain.and.pident70 = sum(mosaic.pident70, na.rm = TRUE),
+            num.reprseq.pairs.mosaic.by.domain.and.pident90 = sum(mosaic.pident90, na.rm = TRUE)) %>%
+  ungroup() %>%
+  mutate(prop.reprseq.pairs.mosaic.by.domain.that.have.pident10 = num.reprseq.pairs.mosaic.by.domain.and.pident10/num.reprseq.pairs.mosaic.by.domain,
+         prop.reprseq.pairs.mosaic.by.domain.that.have.pident30 = num.reprseq.pairs.mosaic.by.domain.and.pident30/num.reprseq.pairs.mosaic.by.domain,
+         prop.reprseq.pairs.mosaic.by.domain.that.have.pident50 = num.reprseq.pairs.mosaic.by.domain.and.pident50/num.reprseq.pairs.mosaic.by.domain,
+         prop.reprseq.pairs.mosaic.by.domain.that.have.pident70 = num.reprseq.pairs.mosaic.by.domain.and.pident70/num.reprseq.pairs.mosaic.by.domain,
+         prop.reprseq.pairs.mosaic.by.domain.that.have.pident90 = num.reprseq.pairs.mosaic.by.domain.and.pident90/num.reprseq.pairs.mosaic.by.domain,)
+
+data.table::fwrite(mosaic.pairs.by.ecod.and.seq.from.top.diverse, sprintf("%sAdditional_Figures/mosaic.pairs.by.ecod.and.seq.from.top.diverse.txt", OUTPUT.FIGURES.PATH))
+  
+```
+
+```{r, eval = FALSE}
+# add some stats to diversity data
+# mean seq length length and prop mosaic by sequence or domain
+
+
+data.table::fwrite(diversity.data2 %>%
+  filter(data.type == "top.diversity") %>%
+    select(mean.num.t, prop.mosaic.pairs.sequence.thr0p1, prop.mosaic.pairs.sequence.thr0p3, prop.mosaic.pairs.sequence.thr0p5, 
+           prob.mosaicism, num.mosaic.pairs, annotation, category, 
+           prop.mosaic, num.reprseq.pairs.domain, num.theoretical.fold.type.pairs.with.multi.x,
+           prop.with.multi.x.domains,
+           mean.length,
+           `proteome covered by ECOD hits`,
+           `prot. with any ECOD hit`) %>%
+  tidyr::gather(key = "proportion", value = "value", -c("annotation", "category")), 
+  sprintf("%stables/mosaicism.top.diverse.classes.txt", OUTPUT.FIGURES.PATH))
+```
+
+
+```{r, eval = FALSE}
+
+prop.mosaic.per.category = all.proteins %>%  
+  inner_join(surely.annotated.proteins.from.included.categories) %>%
+  group_by(annotation.index) %>%
+  summarise(prop.mosaic = n_distinct(qname[mosaic])/n_distinct(qname)) 
+
+
+diversity.data2 = diversity.data %>%
+  left_join(mosaic.pairs.from.included.funct %>% 
+              filter(annotation.index.from == annotation.index.to) %>% 
+              select(annotation.index = annotation.index.from, num.reprseq.pairs.domain)) %>%
+  inner_join(prop.mosaic.per.category) %>%
+  left_join(prop.mosaic.and.multidomain.data) %>%
+  rename(`prot. with any ECOD hit` = prop.proteins.with.ecod.hit,
+         `proteome covered by ECOD hits` = prop.ecod.annotated.positions) %>%
+  mutate(ecod.coverage.type = if_else(`prot. with any ECOD hit` < MIN.PROP.PROTS.WITH.ECOD.HIT, 
+                                      "few prots. with >=1 detected domains",
+                                      if_else(prop.with.multi.x.domains < MIN.PROP.PROTS.WITH.ECOD.HIT, 
+                                              "few prots. with >=2 detected domains", "")))
+
+   data.table::fwrite(diversity.data2, 
+                      sprintf("%sFigure_Supplementary/FigS9_ecod_hist/Diversity_vs_mosaicism.txt", OUTPUT.FIGURES.PATH))        
+```
+
+
+
+
+# Domains within known and unknown proteins
+```{r, eval = FALSE}
+domains.within.proteins = GetDomainsWithinMosaicProteins(all.proteins %>% select(qname, mosaic), families, ecod.domains.hits, ecod_id_to_names_map)
+data.table::fwrite(domains.within.proteins, file = sprintf("%sAdditional_Figures/domains-in-known-and-unknown.txt", OUTPUT.FIGURES.PATH))
+
+domains.within.proteins.with.domain.mosaicism = GetDomainsWithinMosaicProteins(all.proteins %>% select(qname, mosaic = mosaic.domain), families, ecod.domains.hits, ecod_id_to_names_map)
+data.table::fwrite(domains.within.proteins.with.domain.mosaicism, file = sprintf("%sAdditional_Figures/domains-in-known-and-unknown-domain-mosaic.txt", OUTPUT.FIGURES.PATH))
+
+domains.within.proteins.with.domain.mosaicism.and.pident30 = GetDomainsWithinMosaicProteins(
+  all.proteins %>% 
+     mutate(mosaic = mosaic.domain & mosaic.seq.pident30) %>%
+     select(qname, mosaic), 
+ families, ecod.domains.hits, ecod_id_to_names_map)
+data.table::fwrite(domains.within.proteins.with.domain.mosaicism.and.pident30, file = sprintf("%sAdditional_Figures/domains-in-known-and-unknown-domain-mosaic-and-pident30.txt", OUTPUT.FIGURES.PATH))
+
+domains.within.proteins.with.domain.mosaicism.and.pident50 = GetDomainsWithinMosaicProteins(
+  all.proteins %>% 
+     mutate(mosaic = mosaic.domain & mosaic.seq.pident50) %>%
+     select(qname, mosaic), 
+ families, ecod.domains.hits, ecod_id_to_names_map)
+data.table::fwrite(domains.within.proteins.with.domain.mosaicism.and.pident50, file = sprintf("%sAdditional_Figures/domains-in-known-and-unknown-domain-mosaic-and-pident50.txt", OUTPUT.FIGURES.PATH))
+
+domains.within.proteins.with.domain.mosaicism.and.pident70 = GetDomainsWithinMosaicProteins(
+  all.proteins %>% 
+     mutate(mosaic = mosaic.domain & mosaic.seq.pident70) %>%
+     select(qname, mosaic), 
+ families, ecod.domains.hits, ecod_id_to_names_map)
+data.table::fwrite(domains.within.proteins.with.domain.mosaicism.and.pident70, file = sprintf("%sAdditional_Figures/domains-in-known-and-unknown-domain-mosaic-and-pident70.txt", OUTPUT.FIGURES.PATH))
+
+
+domains.within.proteins.with.seq.mosaicism = GetDomainsWithinMosaicProteins(all.proteins %>% select(qname, mosaic = mosaic.seq), families, ecod.domains.hits, ecod_id_to_names_map)
+data.table::fwrite(domains.within.proteins.with.domain.mosaicism, file = sprintf("%sAdditional_Figures/domains-in-known-and-unknown-seq-mosaic.txt", OUTPUT.FIGURES.PATH))
+
+```
+
+
+
+```{r, eval = FALSE}
+excel.filename = "Statistics.xlsx"
+# mean length of sequences per data type
+mean.seq.length.table = diversity.data2 %>% 
+  filter(data.type %in% c("top.diversity", "low.diversity")) %>%
+  group_by(data.type) %>% 
+  summarise(mean.sequence.length = round(median(mean.length, na.rm = TRUE),1))
+write.xlsx(x=mean.seq.length.table, 
+           file = sprintf("%stables/%s", OUTPUT.FIGURES.PATH, excel.filename), 
+           sheetName = "Mean seq length per data type", 
+  col.names = TRUE, row.names = TRUE, append = TRUE)
+test.longer.top.diverse = wilcox.test(x= diversity.data2 %>% filter(data.type == "top.diversity") %>% pull(mean.length), 
+            y= diversity.data2 %>% filter(data.type == "low.diversity") %>% pull(mean.length), 
+            paired = FALSE, alternative = "greater")
+wilcox.test.data3 = data.frame(pval = test.longer.top.diverse$p.value,
+                              statistic = test.longer.top.diverse$statistic)
+write.xlsx(x=wilcox.test.data3, 
+           file = sprintf("%stables/%s", OUTPUT.FIGURES.PATH, excel.filename), 
+           sheetName = "Wilcox test seq length data type", 
+  col.names = TRUE, row.names = TRUE, append = TRUE)
+
+
+
+
+
+# test if top diversity functions are more mosaic than the low diversity oens
+prop.mosaic.in.top.diverse.functions = diversity.data2 %>% filter(data.type == "top.diversity") %>% pull(prop.mosaic)
+prop.mosaic.in.low.diverse.functions = diversity.data2 %>% filter(data.type == "low.diversity") %>% pull(prop.mosaic)
+mean(prop.mosaic.in.top.diverse.functions)
+mean(prop.mosaic.in.low.diverse.functions)
+test.more.mosaic.top.diverse = wilcox.test(x= prop.mosaic.in.top.diverse.functions, 
+            y= prop.mosaic.in.low.diverse.functions, 
+            paired = FALSE, alternative = "greater")
+wilcox.test.data = data.frame(pval = test.more.mosaic.top.diverse$p.value,
+                              statistic = test.more.mosaic.top.diverse$statistic)
+write.xlsx(x=wilcox.test.data, 
+           file = sprintf("%stables/%s", OUTPUT.FIGURES.PATH, excel.filename), 
+           sheetName = "Wilcox test prop. mosaic per data type", 
+  col.names = TRUE, row.names = TRUE, append = TRUE)
+
+
+# number of functional categories poorly and well annotated by ECOD
+num.functional.categories.data = diversity.data %>% 
+  distinct(annotation, category, poorly.ecod.annotated) %>%
+  group_by(poorly.ecod.annotated) %>%
+  summarise(n.classes = n())
+write.xlsx(x=num.functional.categories.data, 
+           file = sprintf("%stables/%s", OUTPUT.FIGURES.PATH, excel.filename), 
+           sheetName = "Number of functional categories per data type", 
+  col.names = TRUE, row.names = TRUE, append = TRUE)
+
+
+# Correlation between num families/ num proteins and numbr of topology combinations
+diversity.ok.ecod = diversity.data %>% filter(!poorly.ecod.annotated)
+#ctest = cor.test(diversity.ok.ecod$num.families, diversity.ok.ecod$num.topology.combinations, method = "spearman")
+ctest = cor.test(diversity.ok.ecod$num.proteins, diversity.ok.ecod$num.topology.combinations, method = "spearman")
+ctesttable = data.frame(rho = ctest$estimate, p = ctest$p.value)
+write.xlsx(x=ctesttable, 
+           file = sprintf("%stables/%s", OUTPUT.FIGURES.PATH, excel.filename), 
+           sheetName = "Correlation between two diversity measures", 
+  col.names = TRUE, row.names = TRUE, append = TRUE)
+
+
+# mean number of folds in low and top diversity functios
+fold.number.per.data.type = diversity.data %>% 
+  filter(data.type %in% c("top.diversity", "low.diversity")) %>%
+  group_by(data.type) %>% 
+  summarise(mean.num.folds = mean(mean.num.t, na.rm = TRUE))
+write.xlsx(x=fold.number.per.data.type, 
+           file = sprintf("%stables/%s", OUTPUT.FIGURES.PATH,excel.filename), 
+           sheetName = "Av. number of folds per data type", 
+  col.names = TRUE, row.names = TRUE, append = TRUE)
+
+test.more.folds.top.diverse = wilcox.test(x= diversity.data %>% filter(data.type == "top.diversity") %>% pull(mean.num.t), 
+            y= diversity.data %>% filter(data.type == "low.diversity") %>% pull(mean.num.t), 
+            paired = FALSE, alternative = "greater")
+wilcox.test.data2 = data.frame(pval = test.more.folds.top.diverse$p.value,
+                              statistic = test.more.folds.top.diverse$statistic)
+write.xlsx(x=wilcox.test.data2, 
+           file = sprintf("%stables/%s", OUTPUT.FIGURES.PATH, excel.filename), 
+           sheetName = "Wilcox test num folds per data type", 
+  col.names = TRUE, row.names = TRUE, append = TRUE)
+
+
+
+
+# some of the annotated may have hits to phrog classes with < 500 seq or may have multiple hits
+num.proteins.with.unknown.function = all.proteins %>%
+  group_by(has.unknown.function) %>%
+  summarise(n = n())
+write.xlsx(x=num.proteins.with.unknown.function, 
+           file = sprintf("%stables/%s", OUTPUT.FIGURES.PATH, excel.filename), 
+           sheetName = "num proteins.with unknown function", 
+  col.names = TRUE, row.names = TRUE, append = TRUE)
+
+
+aa = diversity.data %>% select(annotation, num.families, data.type, poorly.ecod.annotated) 
+poorly_annotated_classes =  aa %>% filter(poorly.ecod.annotated) %>% arrange(desc(num.families))
+write.xlsx(x=poorly_annotated_classes, 
+           file = sprintf("%stables/%s", OUTPUT.FIGURES.PATH, excel.filename), 
+           sheetName = " Poorly annotated classes", 
+  col.names = TRUE, row.names = TRUE, append = TRUE)
+
+n_distinct(surely.annotated.proteins.including.multi.annot %>% filter(num.annots == 1) %>% pull(qname))
+n_distinct(repr.seq.lengths)
+
+#mosaic.network %>% filter(num.reprseq.pairs.seq > 0 & num.reprseq.pairs.domain > 0 & from.index == to.index) %>% nrow()
+#mosaic.network %>% filter(num.reprseq.pairs.seq > 0 | num.reprseq.pairs.domain > 0 & from.index == to.index) %>% nrow()
+aa=all.proteins %>%
+  inner_join(surely.annotated.proteins.from.included.categories) %>%
+  group_by(annotation.index) %>%
+  summarise(any.signal = any(mosaic.seq) | any(mosaic.domain),
+            domain.signal = any(mosaic.domain),
+            both.signal = any(mosaic.seq) & any(mosaic.domain))
+
+bb = data.frame(
+ any.signal = sum(aa$any.signal),
+ both.signal = sum(aa$both.signal),
+ domain.signal = sum(aa$domain.signal),
+ all.classes = nrow(aa))
+write.xlsx(x=bb, 
+           file = sprintf("%stables/%s", OUTPUT.FIGURES.PATH, excel.filename), 
+           sheetName = "num annots with mosaic signal", 
+  col.names = TRUE, row.names = TRUE, append = TRUE)
+
+```
+
+```{r, eval = FALSE}
+
+
+
+proteins.function.data = all.proteins %>%
+  # filter(has.hit.to.anything.in.the.data & has.unknown.function) %>%
+  left_join(relaxely.annotated.proteins.including.multi.annot %>% select(qname, annotation, annotation.index, category, include)) %>%
+  filter(include) %>%
+  mutate(annotation = if_else(is.na(annotation), "unknown", annotation)) %>%
+  mutate(category = if_else(is.na(category), "unknown", category))  %>%
+  group_by(qname, family, mosaic) %>%
+  mutate(num.hits = n_distinct(annotation[annotation != "unknown"]),
+         annotation.weight = 1/num.hits,
+         is.unannotated = if_else(num.hits == 0,1,0)) %>%
+  ungroup() %>%
+  mutate(this.annot.weight = if_else(annotation != "unknown", annotation.weight, is.unannotated))
+
+
+table.seq.functions.new = proteins.function.data %>%
+  #group_by(family, annotation, category, mosaic) %>%
+  #summarise(annotation.weight = mean(this.annot.weight)) %>%
+  group_by(annotation, category, mosaic) %>%
+  summarise(weight = sum(annotation.weight)) %>%
+  ungroup() %>%
+  arrange(desc(weight)) %>%
+  mutate(mosaic = if_else(mosaic, "Mosaic", "Not mosaic")) %>%
+  filter(annotation != "unknown") %>%
+  group_by(mosaic) %>%
+  mutate(total.weight = sum(weight)) %>%
+  ungroup() %>%
+  mutate(freq = weight/total.weight) 
+
+data.table::fwrite(table.seq.functions.new, sprintf("%sFigure3/table.seq.functions.low.cov.txt", OUTPUT.FIGURES.PATH))
+
+```
+
+
+```{r, eval = FALSE, fig.width = 8, fig.width = 12}
+
+annot.stats.per.category.and.mosaicism = Get.Mosaicism.Odds.Ratio.Data(
+  all.proteins = all.proteins, 
+  annotations = relaxely.annotated.proteins.including.multi.annot, 
+  diversity.data = diversity.data) %>%
+  left_join(diversity.data2 %>% select(annotation.index, data.type, ecod.coverage.type))
+
+annot.stats.per.category.and.mosaicism.by.domain = Get.Mosaicism.Odds.Ratio.Data(
+  all.proteins = all.proteins %>% select(qname, mosaic = mosaic.domain), 
+  annotations = relaxely.annotated.proteins.including.multi.annot, 
+  diversity.data = diversity.data) %>%
+  left_join(diversity.data2 %>% select(annotation.index, data.type, ecod.coverage.type))
+
+annot.stats.per.category.and.mosaicism.by.seq = Get.Mosaicism.Odds.Ratio.Data(
+  all.proteins = all.proteins %>% select(qname, mosaic = mosaic.seq), 
+  annotations = relaxely.annotated.proteins.including.multi.annot, 
+  diversity.data = diversity.data)%>%
+  left_join(diversity.data2 %>% select(annotation.index, data.type, ecod.coverage.type))
+
+data.table::fwrite(annot.stats.per.category.and.mosaicism, file = sprintf("%stables/unknown_functions_mosaic_vs_nonmosaic.txt", OUTPUT.FIGURES.PATH))
+data.table::fwrite(annot.stats.per.category.and.mosaicism.by.domain, file = sprintf("%stables/unknown_functions_mosaic_vs_nonmosaic_by_domain.txt", OUTPUT.FIGURES.PATH))
+data.table::fwrite(annot.stats.per.category.and.mosaicism.by.seq, file = sprintf("%stables/unknown_functions_mosaic_vs_nonmosaic_by_seq.txt", OUTPUT.FIGURES.PATH))
+
+
+annot.stats.per.category.and.mosaicism.sure.annot = Get.Mosaicism.Odds.Ratio.Data(
+  all.proteins = all.proteins, 
+  annotations = surely.annotated.proteins, 
+  diversity.data = diversity.data) %>%
+  left_join(diversity.data2 %>% select(annotation.index, data.type, ecod.coverage.type))
+
+annot.stats.per.category.and.mosaicism.by.domain.sure.annot = Get.Mosaicism.Odds.Ratio.Data(
+  all.proteins = all.proteins %>% select(qname, mosaic = mosaic.domain), 
+  annotations = surely.annotated.proteins, 
+  diversity.data = diversity.data) %>%
+  left_join(diversity.data2 %>% select(annotation.index, data.type, ecod.coverage.type))
+
+annot.stats.per.category.and.mosaicism.by.seq.sure.annot = Get.Mosaicism.Odds.Ratio.Data(
+  all.proteins = all.proteins %>% select(qname, mosaic = mosaic.seq), 
+  annotations = surely.annotated.proteins, 
+  diversity.data = diversity.data)%>%
+  left_join(diversity.data2 %>% select(annotation.index, data.type, ecod.coverage.type))
+
+data.table::fwrite(annot.stats.per.category.and.mosaicism.sure.annot, file = sprintf("%stables/known_functions_mosaic_vs_nonmosaic.txt", OUTPUT.FIGURES.PATH))
+data.table::fwrite(annot.stats.per.category.and.mosaicism.by.domain.sure.annot, file = sprintf("%stables/known_functions_mosaic_vs_nonmosaic_by_domain.txt", OUTPUT.FIGURES.PATH))
+data.table::fwrite(annot.stats.per.category.and.mosaicism.by.seq.sure.annot, file = sprintf("%stables/known_functions_mosaic_vs_nonmosaic_by_seq.txt", OUTPUT.FIGURES.PATH))
+
+
+
+# test: domain Major cpasid protein GP7 is present in 121 proteins, 66 of them are known annotation (major capsid or structural protein)
+# additionally 17 had a function that was not defined uniquely (capsid & structural protein)
+# 116 of them were mosaic!
+# 11 has sequence mosaicism and 111 had domain mosaicism!
+# all 111 proteins with domain mosaicism had two domains: Major capsid protein gp5 & Major capsid protein GP7 (fold 3555.1.1, unknown X name)
+# in the mosaic pairs they occured in the following combinations with 11 capsid proteins taht had a different fold architecture: 
+# 1) Major capsid protein gp5 & Major capsid protein GP7  vs  Major capsid protein gp5 & Carbohydrate binding domain (probably also a capsid)
+# 2) Major capsid protein gp5 & Major capsid protein GP7  vs  Major capsid protein gp5 & craddle loop barrel (probably also a capsid)
+# 3) Major capsid protein gp5 & Major capsid protein GP7  vs  Major capsid protein gp5 & ClpP/crotonase (probably also a capsid)
+
+```
+
+# what domains are shared in mosaic pairs
+```{r, eval = FALSE}
+domains.shared.in.mosaic.pairs = qname.pairs.sharing.t.and.disshare.x %>%
+  group_by(shared_t_id) %>%
+  summarise(num.family.pairs = n_distinct(family.pair),
+            num.reprseq.pairs = n_distinct(reprseq.pair),
+            num.unknown.family.pairs = n_distinct(family.pair[is.na(annotation.index.from) | is.na(annotation.index.to)]),
+            num.known.family.pairs = n_distinct(family.pair[!is.na(annotation.index.from) & !is.na(annotation.index.to)])) %>%
+  ungroup() %>%
+  mutate(prop.family.pairs = num.family.pairs/n_distinct(qname.pairs.sharing.t.and.disshare.x$family.pair),
+         prop.protein.pairs = num.reprseq.pairs/n_distinct(qname.pairs.sharing.t.and.disshare.x$reprseq.pair))
+
+
+domains.shared.in.mosaic.pairs$h.index <- sapply(1:nrow(domains.shared.in.mosaic.pairs), function(index){
+  this.topology <- domains.shared.in.mosaic.pairs$shared_t_id[index]
+  this.topology.h.index <- strsplit(this.topology, ".", fixed = T)[[1]]
+  this.topology.h.index <- this.topology.h.index[-length(this.topology.h.index)]
+  this.topology.h.index <- as.character(paste(this.topology.h.index, collapse = "."))
+})
+
+domains.shared.in.mosaic.pairs = domains.shared.in.mosaic.pairs %>%
+    left_join(ecod_id_to_names_map %>% filter(level == "H") %>% select(h.index = id, h_name = name)) %>%
+    left_join(ecod_id_to_names_map %>% filter(level == "T") %>% select(shared_t_id = id, t_name = name)) 
+
+data.table::fwrite(domains.shared.in.mosaic.pairs, file = sprintf("%sFigure_Supplementary/FigS7_folds_shared_by_mosaic/domains-shared-by-mosaic-pairs.txt", OUTPUT.FIGURES.PATH))
+```
+
+########### OLD CODE VISUALISATION #############
+
+```{r, eval = FALSE}
+text.size.axis = 6
+text.size.panel = 12
+
+  domain.position.plots = list()
+  tile.data = data.table::fread(sprintf("%sFigure5/domain.pbottomositions.txt", OUTPUT.FIGURES.PATH)) %>% filter(domain.level == "T")
+
+  colormap = tile.data %>% distinct(domain) %>% filter(!(domain %in% c("undetected", "multiple domains")))
+  colormap$color = randomcoloR::distinctColorPalette(nrow(colormap))
+  colormap = rbind(colormap, data.frame(domain = c("undetected", "multiple domains"), 
+                                                  color = c( "#FFFFFF",  "#000000"), stringsAsFactors = FALSE))
+  colm = colormap$color
+  names(colm) = colormap$domain
+        
+      for (this.annotation in unique(tile.data$annotation)) {
+        this.tile.data = tile.data %>% 
+          filter(annotation == this.annotation)  %>% 
+          mutate(annotation = this.annotation) %>%
+          arrange(row)
+        
+        gg_rect = Show.Domain.Position.Within.Data(
+          this.tile.data,
+          colm, 
+          theme.no.verical) +
+          #scale_y_discrete(breaks =this.tile.data$qname, labels = this.tile.data$family) +
+          
+            theme(strip.text.x = element_text(size = text.size.panel), 
+            legend.position = "none") +
+              theme(
+                axis.title.x = element_text(size = text.size.axis),
+                axis.title.y = element_text(size = text.size.axis),
+                #axis.text.x = element_blank(),
+                axis.text.y = element_blank(),
+                #axis.text.y = element_text(size = text.size.axis),
+                #axis.ticks.x = element_blank(),
+                axis.ticks.y = element_blank())
+                
+        domain.position.plots[[this.annotation]] =  gg_rect
+  }
+  
+  
+  #Create a subfigure with legend only, take only the most frequent
+  colormap.with.names = colormap %>% inner_join(tile.data %>% 
+                                                 group_by(domain_name) %>%
+                                                 mutate(num_qnames = n_distinct(qname)) %>%
+                                                 filter(num_qnames >= 3) %>%
+                                                 distinct(domain, domain_name)) %>% distinct(color, domain_name)
+  colm.with.names = colormap.with.names$color
+  names(colm.with.names) = colormap.with.names$domain_name
+  
+  g.dummy = ggplot(tile.data, aes(x=qname, y = domain, fill = domain_name)) + geom_col() + 
+    scale_fill_manual(values = colm.with.names, name = 'Domain topology') +
+    theme(legend.margin =margin(r=0,l=0,t=0,b=0), text = element_text(size = 7)) +
+    guides(fill=guide_legend(ncol=6))
+  
+  leg <- ggpubr::get_legend(g.dummy, position = "right")
+  ggleg = ggpubr::as_ggplot(leg)
+#grid::widthDetails(leg)
+#grid::heightDetails(leg)
+
+
+  
+    ncol = ceiling(length(domain.position.plots)/4)
+    jpeg(sprintf("%sFigure5/domain.positions.jpg", OUTPUT.FIGURES.PATH), 
+         width = 50, 
+         height = 30, units = "cm", res = 300)
+    
+    ggpubr::ggarrange(
+      egg::ggarrange(plots = domain.position.plots,
+                     ncol = ncol, nrow = 4),
+      ggleg,
+      nrow = 2,
+      heights = c(0.77,0.25))
+      #legend.prob = ggleg,
+      #nrow = 1,
+      #legend = "bottom")
+  dev.off()
+
+```
+
+```{r, eval = FALSE}
+
+mosaic.domain.classes.long = mosaic.domain.classes = data.table::fread(sprintf("%sFigure5/mosaic.domain.classes.txt", OUTPUT.FIGURES.PATH)) %>%
+  select(annotation.index, annotation, category, 
+         num.prot.mosaic.domain.any.within.class,
+         num.prot.mosaic.domain.only.to.other.specific.class,
+         #num.prot.mosaic.domain.only.within.class.or.unspecific, 
+         #num.prot.mosaic.domain.within.and.to.other.specific.class, 
+         num.prot.mosaic.domain.only.to.unpecific.or.excluded.class) %>%
+  inner_join(included.category.sizes %>% select(annotation.index)) %>%
+  inner_join(top.diversity.classes) %>%
+  filter(!(annotation.index %in% unspecific.annotation.indices)) %>%
+  rename(mosaic.within.class = num.prot.mosaic.domain.any.within.class,#num.prot.mosaic.domain.only.within.class.or.unspecific, 
+         mosaic.to.other.class =  num.prot.mosaic.domain.only.to.other.specific.class,#num.prot.mosaic.domain.within.and.to.other.specific.class, 
+         mosaic.to.unknowns.only =   num.prot.mosaic.domain.only.to.unpecific.or.excluded.class) %>%
+  tidyr::gather(key = "type", value = "num.reprseq",-annotation.index, -annotation, -category)
+mosaic.domain.classes.long$type = factor(mosaic.domain.classes.long$type,
+                                            levels = c(
+                                              'mosaic.to.unknowns.only',
+                                              'mosaic.to.other.class',
+                                              'mosaic.within.class'))
+
+g=ggplot(mosaic.domain.classes.long) +
+  geom_bar(aes(y = annotation, x = num.reprseq, fill = category, col = category, alpha = type), stat = "identity", position = "stack") +
+  scale_alpha_manual(values = c(mosaic.within.class = 1,
+                                mosaic.to.other.class = 0.5, 
+                                mosaic.to.unknowns.only = 0.05)) +
+  #theme_bw() +
+  #scale_fill_manual(values = c(mosaic.only.within.class = "gray50",
+  #                              mosaic.to.other.class = "gray70", 
+  #                              mosaic.to.unknowns.only = "gray90")) +
+    scale_fill_manual(values = PHROG.COLOR.MAP) + 
+    scale_color_manual(values = PHROG.COLOR.MAP) + 
+   theme_minimal() + 
+    theme(strip.text.y = element_text(face = "bold", size = 7, angle = 360)) + 
+    labs(y = "", x = "Num. rHMMs with mosaic signal") +
+    scale_x_continuous(labels=function(x) sprintf("%.2f", x)) +
+    facet_grid(category ~ ., scales = "free", space = "free") +
+  guides(color = "none", fill = "none")
+  
+g
+ggsave(sprintf("%sFigure5/Figure5a_signal_of_mosaicism_within_and_outside_a_class_v1.pdf", OUTPUT.FIGURES.PATH), g,
+       width = 13, height = 7)
+ggsave(sprintf("%sFigure5/Figure5a_signal_of_mosaicism_within_and_outside_a_class_v1.png", OUTPUT.FIGURES.PATH), g, bg = "white",
+       width = 13, height = 7)
+```
+
+
+```{r, eval = FALSE}
+annot.stats.per.category.and.mosaicism = data.table::fread(file = sprintf("%sFigure6/unknown_functions_mosaic_vs_nonmosaic.txt", OUTPUT.FIGURES.PATH)) %>%
+  arrange(category, annotation)
+annot.stats.per.category.and.mosaicism.by.seq = data.table::fread(file = sprintf("%sFigure6/unknown_functions_mosaic_vs_nonmosaic_by_seq.txt", OUTPUT.FIGURES.PATH)) %>%
+  arrange(category, annotation)
+annot.stats.per.category.and.mosaicism.by.domain = data.table::fread(file = sprintf("%sFigure6/unknown_functions_mosaic_vs_nonmosaic_by_domain.txt", OUTPUT.FIGURES.PATH)) %>%
+  arrange(category, annotation)
+
+ss.by.domain.or.seq=annot.stats.per.category.and.mosaicism %>%
+  arrange(desc(odds.ratio)) %>%
+  filter(corrected.pval < 0.05) %>%
+  #head(60) %>%
+  mutate(mosaic = if_else(mosaic, "Mosaic", "Not mosaic")) 
+
+
+ss.by.domain=annot.stats.per.category.and.mosaicism.by.domain %>%
+  arrange(desc(odds.ratio)) %>%
+  filter(corrected.pval < 0.05) %>%
+  #head(60) %>%
+  mutate(mosaic = if_else(mosaic, "Mosaic", "Not mosaic"))
+
+ss.by.seq=annot.stats.per.category.and.mosaicism.by.seq %>%
+  arrange(desc(odds.ratio)) %>%
+  filter(corrected.pval < 0.05) %>%
+  #head(60) %>%
+  mutate(mosaic = if_else(mosaic, "Mosaic", "Not mosaic"))
+  
+ss = rbind(ss.by.domain %>% mutate(mosaicism.type = "Mosaic by domain"),
+           ss.by.domain.or.seq %>% mutate(mosaicism.type = "Mosaic by domain or sequence")) %>%
+      rbind(ss.by.seq %>% mutate(mosaicism.type = "Mosaic by sequence")) %>%
+      mutate(ecod.coverage.type2 = if_else(ecod.coverage.type == "few prots. with >=1 detected domains" | ecod.coverage.type == "few prots. with >=2 detected domains", "< 20% prots. with >=2\ndetected domains", ">= 20% prots. with >=2\ndetected domains"))
+  
+
+ss$mosaic = factor(ss$mosaic, levels = c("Not mosaic", "Mosaic"))
+ss$ecod.coverage.type2 = factor(ss$ecod.coverage.type2, levels = c(">= 20% prots. with >=2\ndetected domains", "< 20% prots. with >=2\ndetected domains"))
+ss$category[ss$category == "DNA, RNA and nucleotide metabolism"] = "DNA, RNA\nand nucleotide metabolism"
+ss$category[ss$category =="moron, auxiliary metabolic gene and host takeover" ] = "moron,\nauxiliary metabolic gene\nand host takeover" 
+PHROG.COLOR.MAP2 = PHROG.COLOR.MAP
+idx=which(names(PHROG.COLOR.MAP2) == "DNA, RNA and nucleotide metabolism")
+names(PHROG.COLOR.MAP2)[idx] = "DNA, RNA\nand nucleotide metabolism"
+idx=which(names(PHROG.COLOR.MAP2) ==  "moron, auxiliary metabolic gene and host takeover")
+names(PHROG.COLOR.MAP2)[idx] = "moron,\nauxiliary metabolic gene\nand host takeover" 
+
+
+
+ss.domain = ss  %>%  
+  distinct(annotation, category, odds.ratio,ecod.coverage.type2, mosaicism.type) %>%
+  filter(mosaicism.type == "Mosaic by domain") %>%
+  arrange(desc(odds.ratio)) %>%
+  head(30)
+ss.domain$annotation = factor(ss.domain$annotation, levels = unique(ss.domain %>% arrange(ecod.coverage.type2, odds.ratio) %>% pull(annotation)))
+
+ss.both = ss  %>%  
+  distinct(annotation, category, odds.ratio,ecod.coverage.type2, mosaicism.type) %>%
+  filter(mosaicism.type == "Mosaic by domain or sequence") %>%
+  arrange(desc(odds.ratio)) %>%
+  head(30)
+ss.both$annotation = factor(ss.both$annotation, levels = unique(ss.both %>% arrange(ecod.coverage.type2, odds.ratio) %>% pull(annotation)))
+
+
+p.odds.low.cov.by.domain = ggplot(ss.domain, aes(x=annotation, y = odds.ratio, fill = category)) +
+  geom_bar(stat="identity", width = 0.8) + 
+  scale_fill_manual(values = PHROG.COLOR.MAP2) +
+  theme_minimal() + 
+  #guides(fill = "none") + 
+  theme(legend.text=element_text(size=8)) + 
+  labs(x = "", y = "Odds ratio", fill = "category") + 
+  coord_flip() +
+  facet_grid(ecod.coverage.type2 ~ mosaicism.type, scales = "free", space = "free")
+p.odds.low.cov.by.domain
+
+
+p.odds.low.cov = ggplot(ss.both, aes(x=annotation, y = odds.ratio, fill = category)) +
+  geom_bar(stat="identity", width = 0.8) + 
+  scale_fill_manual(values = PHROG.COLOR.MAP2) +
+  theme_minimal() + 
+  #guides(fill = "none") + 
+  theme(legend.text=element_text(size=8)) + 
+  labs(x = "", y = "Odds ratio", fill = "category") + 
+  coord_flip() +
+  facet_grid(ecod.coverage.type2 ~ mosaicism.type, scales = "free", space = "free")
+p.odds.low.cov
+
+
+fig4ab = plot_grid(p.odds.low.cov.by.domain + theme(legend.position = "none"), p.odds.low.cov, labels = c("A", "B"), label_size = 25, ncol = 2,rel_widths = c(0.4, 0.6))
+ggsave(sprintf("%sAdditional_Figures/odds_ratio_domain_and_seq_v1_lowcov.pdf", OUTPUT.FIGURES.PATH), fig4ab,  width = 15, height = 6)
+ggsave(sprintf("%sAdditional_Figures/odds_ratio_domain_and_seq_v1_lowcov.png", OUTPUT.FIGURES.PATH), fig4ab, bg = "white", width = 15, height = 6)
+
+```
+
+```{r, eval = FALSE, fig.height =5, fig.width =10}
+annot.stats.per.category.and.mosaicism.sure.annot = data.table::fread(file = sprintf("%sFigure6/known_functions_mosaic_vs_nonmosaic.txt", OUTPUT.FIGURES.PATH)) %>%
+  arrange(category, annotation)
+annot.stats.per.category.and.mosaicism.by.seq.sure.annot = data.table::fread(file = sprintf("%sFigure6/known_functions_mosaic_vs_nonmosaic_by_seq.txt", OUTPUT.FIGURES.PATH)) %>%
+  arrange(category, annotation)
+annot.stats.per.category.and.mosaicism.by.domain.sure.annot = data.table::fread(file = sprintf("%sFigure6/known_functions_mosaic_vs_nonmosaic_by_domain.txt", OUTPUT.FIGURES.PATH)) %>%
+  arrange(category, annotation)
+
+
+
+ss.by.domain.or.seq.sure.annot=annot.stats.per.category.and.mosaicism.sure.annot %>%
+  arrange(desc(odds.ratio)) %>%
+  filter(corrected.pval < 0.05) %>%
+  #head(60) %>%
+  mutate(mosaic = if_else(mosaic, "Mosaic", "Not mosaic")) 
+
+
+ss.by.domain.sure.annot=annot.stats.per.category.and.mosaicism.by.domain.sure.annot %>%
+  arrange(desc(odds.ratio)) %>%
+  filter(corrected.pval < 0.05) %>%
+  #head(60) %>%
+  mutate(mosaic = if_else(mosaic, "Mosaic", "Not mosaic"))
+
+ss.by.seq.sure.annot=annot.stats.per.category.and.mosaicism.by.seq.sure.annot %>%
+  arrange(desc(odds.ratio)) %>%
+  filter(corrected.pval < 0.05) %>%
+  #head(60) %>%
+  mutate(mosaic = if_else(mosaic, "Mosaic", "Not mosaic"))
+  
+ss.sure.annot = rbind(ss.by.domain.sure.annot %>% mutate(mosaicism.type = "Mosaic by domain"),
+           ss.by.domain.or.seq.sure.annot %>% mutate(mosaicism.type = "Mosaic by domain or sequence")) %>%
+      rbind(ss.by.seq.sure.annot %>% mutate(mosaicism.type = "Mosaic by sequence")) %>%
+      mutate(ecod.coverage.type2 = if_else(ecod.coverage.type == "few prots. with >=1 detected domains" | ecod.coverage.type == "few prots. with >=2 detected domains", "< 20% prots. with >=2\ndetected domains", ">= 20% prots. with >=2\ndetected domains"))
+  
+
+ss.sure.annot$mosaic = factor(ss.sure.annot$mosaic, levels = c("Not mosaic", "Mosaic"))
+ss.sure.annot$ecod.coverage.type2 = factor(ss.sure.annot$ecod.coverage.type2, levels = c(">= 20% prots. with >=2\ndetected domains", "< 20% prots. with >=2\ndetected domains"))
+ss.sure.annot$category[ss.sure.annot$category == "DNA, RNA and nucleotide metabolism"] = "DNA, RNA\nand nucleotide metabolism"
+ss.sure.annot$category[ss.sure.annot$category =="moron, auxiliary metabolic gene and host takeover" ] = "moron,\nauxiliary metabolic gene\nand host takeover" 
+
+
+ss.domain.sure.annot = ss.sure.annot  %>%  
+  distinct(annotation, category, odds.ratio,ecod.coverage.type2, mosaicism.type) %>%
+  filter(mosaicism.type == "Mosaic by domain") %>%
+  arrange(desc(odds.ratio)) %>%
+  head(30)
+ss.domain.sure.annot$annotation = factor(ss.domain.sure.annot$annotation, levels = unique(ss.domain.sure.annot %>% arrange(ecod.coverage.type2, odds.ratio) %>% pull(annotation)))
+
+ss.domain.or.seq.sure.annot = ss.sure.annot  %>%  
+  distinct(annotation, category, odds.ratio,ecod.coverage.type2, mosaicism.type) %>%
+  filter(mosaicism.type ==  "Mosaic by domain or sequence") %>%
+  arrange(desc(odds.ratio)) %>%
+  head(30)
+ss.domain.or.seq.sure.annot$annotation = factor(ss.domain.or.seq.sure.annot$annotation, levels = unique(ss.domain.or.seq.sure.annot %>% arrange(ecod.coverage.type2, odds.ratio) %>% pull(annotation)))
+
+
+p.odds.high.cov.by.domain = ggplot(ss.domain.sure.annot, aes(x=annotation, y = odds.ratio, fill = category)) +
+  geom_bar(stat="identity", width = 0.8) + 
+  scale_fill_manual(values = PHROG.COLOR.MAP2) +
+  theme_minimal() + 
+  #guides(fill = "none") + 
+  theme(legend.text=element_text(size=8)) + 
+  labs(x = "", y = "Odds ratio", fill = "category") + 
+  coord_flip() +
+  facet_grid(ecod.coverage.type2 ~ mosaicism.type, scales = "free", space = "free")
+p.odds.high.cov.by.domain
+#ggsave(filename = sprintf("%sFigure3/low.cov.odds.ratio.by.domain.jpg", OUTPUT.FIGURES.PATH) ,p.odds.high.cov.by.domain , width = 10, height = 7)
+
+
+p.odds.high.cov =ggplot(ss.domain.or.seq.sure.annot, 
+                        aes(x=annotation, y = odds.ratio, fill = category))  +
+  geom_bar(stat="identity", width = 0.8) + 
+  #geom_text(aes(label = label), nudge_y = 1) +
+  scale_fill_manual(values = PHROG.COLOR.MAP2) +
+  theme_minimal() + 
+  #guides(fill = "none") + 
+  theme(legend.text=element_text(size=8)) + 
+  labs(x = "", y = "Odds ratio", fill = "category") + 
+  coord_flip() +
+  facet_grid(ecod.coverage.type2 ~ mosaicism.type, scales = "free", space = "free") #+
+  #heme(axis.text.y = element_text(colour = rev(ss.domain.or.seq.sure.annot$color)))
+p.odds.high.cov
+fig4ab = plot_grid(p.odds.high.cov.by.domain + theme(legend.position = "none"), p.odds.high.cov, labels = c("A", "B"), 
+                   label_size = 25, ncol = 2,rel_widths = c(0.4, 0.6))
+ggsave(sprintf("%s/Figure6/Figure6a_odds_ratio_domain_and_seq_v2_highcov.png", OUTPUT.FIGURES.PATH), fig4ab,  bg = "white", width = 15, height = 6)
+ggsave(sprintf("%s/Figure6/Figure6a_odds_ratio_domain_and_seq_v2_highcov.pdf", OUTPUT.FIGURES.PATH), fig4ab,  width = 15, height = 6)
+
+
+#ggsave(filename = sprintf("%sFigure3/low.cov.odds.ratio.by.domainor.seq.jpg", OUTPUT.FIGURES.PATH) ,p.odds.high.cov , width = 10, height = 7)
+```
+
+```{r, eval = FALSE}
+
+domains.within.proteins.domain.mosaic = data.table::fread(file = sprintf("%sAdditional_Figures/domains-in-known-and-unknown-domain-mosaic.txt", OUTPUT.FIGURES.PATH))
+p.odds = Plot.Domains.Within.Mosaic.Proteins(domains.within.proteins.domain.mosaic) 
+ggsave(filename = sprintf("%sAdditional_Figures/folds_within_domain_mosaic_proteins.odds.ratio.jpg", OUTPUT.FIGURES.PATH) ,p.odds , width = 15, height = 12)
+
+domains.within.proteins.domain.mosaic.and.pident = data.table::fread(file =  sprintf("%sAdditional_Figures/domains-in-known-and-unknown-domain-mosaic-and-pident70.txt", OUTPUT.FIGURES.PATH))
+p.odds = Plot.Domains.Within.Mosaic.Proteins(domains.within.proteins.domain.mosaic.and.pident) 
+ggsave(filename = sprintf("%sAdditional_Figures/folds_within_domain_and_pident70_mosaic_proteins.odds.ratio.jpg", OUTPUT.FIGURES.PATH) ,p.odds , width = 15, height = 12)
+
+domains.within.proteins = data.table::fread(file = sprintf("%sFigure3/domains-in-known-and-unknown.txt", OUTPUT.FIGURES.PATH))
+p.odds = Plot.Domains.Within.Mosaic.Proteins(domains.within.proteins) 
+ggsave(filename = sprintf("%sAdditional_Figures/folds_within_mosaic_proteins.odds.ratio.jpg", OUTPUT.FIGURES.PATH) ,p.odds , width = 15, height = 12)
+
+domains.within.proteins.seq.mosaic = data.table::fread(file = sprintf("%sAdditional_Figures/domains-in-known-and-unknown-seq-mosaic.txt", OUTPUT.FIGURES.PATH))
+p.odds = Plot.Domains.Within.Mosaic.Proteins(domains.within.proteins) 
+ggsave(filename = sprintf("%sAdditional_Figures/folds_within_seq_mosaic_proteins.odds.ratio.jpg", OUTPUT.FIGURES.PATH) ,p.odds , width = 15, height = 12)
+```
+```{r, eval = FALSE}
+tile.data.dnap.final = data.table::fread(sprintf("%sFigure5/domain.positions.dnap.uniclust.txt", OUTPUT.FIGURES.PATH))
+domain.position.plots =Plot.Domain.Combinations(tile.data.dnap.final, text.size.axis = 9, text.size.panel = 12, interactive.plot = TRUE)$domain.position.plots
+pdf(sprintf("%sFigure5/domain.positions_hypothetical_dnap.uniclust.pdf", OUTPUT.FIGURES.PATH), 
+         width = 17,
+         height = 12)
+#gg_rect
+#ggiraph:girafe(ggobj=gg_rect)
+do.call("grid.arrange", c(domain.position.plots, ncol=1))
+dev.off()
+```
+
+```{r, eval = FALSE}
+diversity.data.per.category = data.table::fread(sprintf("%sFigure3/mosaicism.per.category.txt", OUTPUT.FIGURES.PATH))
+diversity.data.per.category$category[diversity.data.per.category$category == "DNA, RNA and nucleotide metabolism"] = "DNA, RNA\nand nucleotide metabolism"
+diversity.data.per.category$category[diversity.data.per.category$category == "moron, auxiliary metabolic gene and host takeover"] =
+"moron, auxiliary metabolic\ngene and host takeover"
+fug4c = Plot.Mosaicism.Table(diversity.data.per.category %>% 
+                               mutate(annotation = category) %>%
+                               filter(proportion %in% names(diversity.labeller)), 
+                             PHROG.COLOR.MAP = PHROG.COLOR.MAP2)  +
+    facet_grid(. ~ proportion, scales = "free", space = "free_y", 
+                labeller = labeller(proportion = diversity.labeller)) +
+  theme(plot.margin = unit(c(0, 6, 0, 0), "cm"))
+
+
+p.fig4 <- plot_grid(Fig4b, p.most.diverse,fug4c, ncol = 1, labels = c("A", "B", "C"), label_size = 18, rel_heights = c(0.3, 0.5, 0.2))
+p.fig4.filename <- sprintf("%sFigure4/Figure4.png", OUTPUT.FIGURES.PATH)
+ggsave(p.fig4.filename, p.fig4, bg = "white", width = 12, height = 15)
+```
+
+```{r, eval = FALSE}
+#ggsave(filename = sprintf("%sFigure3/low.cov.odds.ratio.by.domain.jpg", OUTPUT.FIGURES.PATH) ,p.odds.low.cov.by.domain , width = 10, height = 7)
+
+
+#ss.domain.or.seq= ss.both %>%
+#  left_join(ss.domain %>% select(annotation, category) %>% mutate(top.odd.by.domain = TRUE)) %>%
+#  mutate(color = if_else(is.na(top.odd.by.domain),"red",  "black"),
+#         label = if_else(is.na(top.odd.by.domain),"*",  "")) %>% 
+#  arrange(ecod.coverage.type2, desc(odds.ratio))
+#ss.domain.or.seq$annotation = factor(ss.domain.or.seq$annotation, levels = unique(ss.domain.or.seq %>% arrange(ecod.coverage.type2, odds.ratio) %>% pull(annotation)))
+
+p.odds.low.cov =ggplot(ss.domain.or.seq, 
+                        aes(x=annotation, y = odds.ratio, fill = category))  +
+  geom_bar(stat="identity", width = 0.8) + 
+    geom_text(aes(label = label), nudge_y = 1) +
+  scale_fill_manual(values = PHROG.COLOR.MAP2) +
+  theme_minimal() + 
+  #guides(fill = "none") + 
+  theme(legend.text=element_text(size=8)) + 
+  labs(x = "", y = "Odds ratio", fill = "category") + 
+  coord_flip() +
+  facet_grid(ecod.coverage.type2 ~ mosaicism.type, scales = "free", space = "free")
+p.odds.low.cov
+ggsave(filename = sprintf("%sFigure3/low.cov.odds.ratio.by.domainor.seq.jpg", OUTPUT.FIGURES.PATH) ,p.odds.low.cov , width = 10, height = 7)
+
+
+
+p.odds.low.cov =ggplot(ss  %>% 
+                         group_by(annotation) %>%
+                         mutate(any.high.odds = any(odds.ratio > 2.5)) %>%
+                          distinct(annotation, category, odds.ratio,ecod.coverage.type2, mosaicism.type, any.high.odds, mosaicism.type) %>%
+                          filter(mosaicism.type == "Mosaic by domain or sequence" | mosaicism.type == "Mosaic by domain") %>%
+                         filter(any.high.odds), 
+                        aes(x=annotation, y = odds.ratio, fill = category)) +
+  geom_bar(stat="identity", width = 0.8) + 
+  scale_fill_manual(values = PHROG.COLOR.MAP2) +
+  #theme_minimal() + 
+  #guides(fill = "none") + 
+  theme(legend.text=element_text(size=8)) + 
+  labs(x = "", y = "Odds ratio", fill = "category") + 
+  coord_flip() +
+  facet_grid(ecod.coverage.type2 ~ ., scales = "free", space = "free_y")
+p.odds.low.cov
+ggsave(filename = sprintf("%sFigure3/low.cov.odds.ratio.by.both.jpg", OUTPUT.FIGURES.PATH) ,p.odds.low.cov , width = 10, height = 7)
+```
+
+```{r, eval = FALSE}
+jpeg(filename = sprintf("%sFigure3/Figure3a_main_network.jpg", OUTPUT.FIGURES.PATH), width = 10, height = 10, units = "cm", res = 300)
+VisualiseIgraphnetwork(data.for.network = mosaic.network %>% 
+                         mutate(weight = log10(num.reprseq.any.mossaic)/20) %>% 
+                         select(from = from.index, to = to.index, weight, dataset),
+                      edge.colors = data.frame(value = c("ecod", "seq", "both"), color = c("gray", "gray", "darkred")),
+                      edge.linetypes = data.frame(value = c("ecod", "seq", "both"), lty = c("solid", "dotted", "solid")),
+                      node.color.map = annotation.network.metadata%>%
+                                      select(node, color),
+                      # node these sizes are defined at high threshold
+                      node.size.map = annotation.network.metadata %>%
+                                      select(node, size) %>% mutate(size = 2*size),
+                      node.labels = annotation.network.metadata %>% 
+                    select(node, label),
+                      line.color.variable = "dataset",
+                      line.color.legend.name = "Mosaicism via",
+                      font.size = 0.25,
+                      main = "",
+                      vertex.label.dist = 1,
+                      include.labels = TRUE,
+                      alpha = 1,
+                    label.font = 2,
+                    legend.title = "Mosaicism via:",
+                    node.label.color = "black")
+dev.off()
+```
+
+```{r, eval = FALSE}
+mosaic.domain.classes = data.table::fread(sprintf("%sFigure5/mosaic.domain.classes.txt", OUTPUT.FIGURES.PATH)) %>%
+  select(annotation, category, annotation.index,
+                prop.prot.mosaic.domain.within.any.pair.in.specific.class,
+                prop.prot.mosaic.domain.within.any.pair.to.other.specific.class,
+                prop.prot.mosaic.domain.within.any.pair.to.unknown.excluded.or.unspecific.class) %>%
+  tidyr::gather(key = "proportion", value = "value",
+                prop.prot.mosaic.domain.within.any.pair.in.specific.class,
+                prop.prot.mosaic.domain.within.any.pair.to.other.specific.class,
+                prop.prot.mosaic.domain.within.any.pair.to.unknown.excluded.or.unspecific.class) 
+
+
+p.mosaic.domain.classes = Plot.Mosaicism.Table(
+  mosaic.domain.classes, 
+  PHROG.COLOR.MAP = PHROG.COLOR.MAP) +
+    facet_grid(category ~ proportion, scales = "free", space = "free_y", 
+                labeller = labeller(category = phrog.class.labels, 
+                                    proportion = c(prop.prot.mosaic.domain.within.any.pair.in.specific.class = "% mosaic prot with\nany pair within the class",
+                                                   prop.prot.mosaic.domain.within.any.pair.to.other.specific.class = "% mosaic prot with\nany pair to other class",
+                                                   prop.prot.mosaic.domain.within.any.pair.to.unknown.excluded.or.unspecific.class = "% mosaic prot with\nany pair oustide of specific classes")))
+
+
+ggsave(sprintf("%sFigure5/Figure5a_signal_of_mosaicism_within_and_outside_a_class_v3.pdf", OUTPUT.FIGURES.PATH), p.mosaic.domain.classes,
+       width = 15, height = 11)
+ggsave(sprintf("%sFigure5/Figure5a_signal_of_mosaicism_within_and_outside_a_class_v3.png", OUTPUT.FIGURES.PATH), p.mosaic.domain.classes, bg = "white",
+       width = 15, height = 11)
+```
+
+
+
+```{r, eval = FALSE}
+diversity.top.prop.mosaic.pairs.that.have.high.pident = data.table::fread(sprintf("%sFigure5/mosaic.pairs.by.ecod.and.seq.from.top.diverse.txt", OUTPUT.FIGURES.PATH)) %>%
+  select(annotation, category, 
+                prop.reprseq.pairs.mosaic.by.domain.that.have.pident10,
+                prop.reprseq.pairs.mosaic.by.domain.that.have.pident30,
+                prop.reprseq.pairs.mosaic.by.domain.that.have.pident50,
+                prop.reprseq.pairs.mosaic.by.domain.that.have.pident70,
+                prop.reprseq.pairs.mosaic.by.domain.that.have.pident90) %>%
+  tidyr::gather(key = "proportion", value = "value",
+                prop.reprseq.pairs.mosaic.by.domain.that.have.pident10,
+                prop.reprseq.pairs.mosaic.by.domain.that.have.pident30,
+                prop.reprseq.pairs.mosaic.by.domain.that.have.pident50,
+                prop.reprseq.pairs.mosaic.by.domain.that.have.pident70,
+                prop.reprseq.pairs.mosaic.by.domain.that.have.pident90)
+
+
+p.most.diverse.perc.domain.pairs.with.pident = Plot.Mosaicism.Table(
+  diversity.top.prop.mosaic.pairs.that.have.high.pident, 
+  PHROG.COLOR.MAP = PHROG.COLOR.MAP) +
+    facet_grid(category ~ proportion, scales = "free", space = "free_y", 
+                labeller = labeller(category = phrog.class.labels, 
+                                    proportion = c(prop.reprseq.pairs.mosaic.by.domain.that.have.pident10 = "Prop pairs with pident >=10%",
+                                                   prop.reprseq.pairs.mosaic.by.domain.that.have.pident30 = "Prop pairs with pident >=30%",
+                                                   prop.reprseq.pairs.mosaic.by.domain.that.have.pident50 = "Prop pairs with pident >=50%",
+                                                   prop.reprseq.pairs.mosaic.by.domain.that.have.pident70 = "Prop pairs with pident >=70%",
+                                                   prop.reprseq.pairs.mosaic.by.domain.that.have.pident90 = "Prop pairs with pident >=90%")))
+
+
+ggsave(sprintf("%sFigure5/Figure5b_domain_mosaic_pairs_after_pident_check.pdf", OUTPUT.FIGURES.PATH), p.most.diverse.perc.domain.pairs.with.pident,
+       width = 15, height = 11)
+ggsave(sprintf("%sFigure5/Figure5b_domain_mosaic_pairs_after_pident_check.png", OUTPUT.FIGURES.PATH), p.most.diverse.perc.domain.pairs.with.pident,
+       bg = "white",
+       width = 15, height = 11)
+```
+
+
+```{r, eval = FALSE}
+diversity.top.prop.mosaic.pairs.that.have.high.pident2 = data.table::fread(sprintf("%sFigure5/mosaic.pairs.by.ecod.and.seq.from.top.diverse.txt", OUTPUT.FIGURES.PATH)) %>%
+  select(annotation, category, 
+                num.reprseq.pairs.mosaic.by.domain,
+                num.reprseq.pairs.mosaic.by.domain.and.pident10,
+                num.reprseq.pairs.mosaic.by.domain.and.pident30,
+                num.reprseq.pairs.mosaic.by.domain.and.pident50,
+                num.reprseq.pairs.mosaic.by.domain.and.pident70,
+                num.reprseq.pairs.mosaic.by.domain.and.pident90) %>%
+  tidyr::gather(key = "num", value = "value",-annotation,-category)
+
+
+p.most.diverse.perc.domain.pairs.with.pident2 = Plot.Mosaicism.Table(
+  diversity.top.prop.mosaic.pairs.that.have.high.pident2, 
+  PHROG.COLOR.MAP = PHROG.COLOR.MAP) +
+    facet_grid(category ~ num, scales = "free", space = "free_y", 
+                labeller = labeller(category = phrog.class.labels, 
+                                    num = c(num.reprseq.pairs.mosaic.by.domain ="Num mosaic pairs",
+                                              num.reprseq.pairs.mosaic.by.domain.and.pident10 = "Num. pairs with pident >=10%",
+                                                   num.reprseq.pairs.mosaic.by.domain.and.pident30 = "Num. pairs with pident >=30%",
+                                                   num.reprseq.pairs.mosaic.by.domain.and.pident50 = "Num. pairs with pident >=50%",
+                                                   num.reprseq.pairs.mosaic.by.domain.and.pident70 = "Num. pairs with pident >=70%",
+                                                   num.reprseq.pairs.mosaic.by.domain.and.pident90 = "Num. pairs with pident >=90%")))
+
+
+ggsave(sprintf("%sFigure5/Figure5b_domain_mosaic_pairs_after_pident_check_v2.pdf", OUTPUT.FIGURES.PATH), p.most.diverse.perc.domain.pairs.with.pident2,
+       width = 15, height = 11)
+ggsave(sprintf("%sFigure5/Figure5b_domain_mosaic_pairs_after_pident_check_v2.png", OUTPUT.FIGURES.PATH), p.most.diverse.perc.domain.pairs.with.pident2,
+        bg = "white",
+       width = 15, height = 11)
+```
+
+
+
+```{r, eval = FALSE}
+diversity.top = data.table::fread(sprintf("%sFigure3/mosaicism.top.diverse.classes.txt", OUTPUT.FIGURES.PATH))
+mosaicism.underestimated.data = data.table::fread(sprintf("%sFigure5/mosaic.domain.classes.txt", OUTPUT.FIGURES.PATH)) %>%
+   select(annotation.index, annotation, category, num.prot.mosaic.domain, num.prot.mosaic.to.anything.with.specific.annotation, num.prot.mosaic.domain.only.to.unpecific.or.excluded.class, num.mprot.mosaic.seq, num.prot.mosaic.seq.or.domain) 
+data.table::fwrite(mosaicism.underestimated.data, file = sprintf("%sFigure5/mosaicism.underestimated.data.txt", OUTPUT.FIGURES.PATH))
+
+mosaicism.underestimated.data = mosaicism.underestimated.data %>%
+  select(annotation.index, annotation, category, num.prot.mosaic.domain,num.prot.mosaic.seq.or.domain, num.prot.mosaic.to.anything.with.specific.annotation) %>%
+  inner_join(included.category.sizes %>% select(annotation.index)) %>%
+  inner_join(diversity.top %>% distinct(annotation, category), by = c("annotation", "category")) %>%
+  filter(!(annotation.index %in% unspecific.annotation.indices)) %>%
+  rename(mosaic.by.ECOD.to.annotated = num.prot.mosaic.to.anything.with.specific.annotation,#num.prot.mosaic.domain.only.within.class.or.unspecific, 
+         mosaic.by.ECOD.to.anything =  num.prot.mosaic.domain,#num.prot.mosaic.domain.within.and.to.other.specific.class, 
+         mosaic.by.ECOD.or.sequence =   num.prot.mosaic.seq.or.domain) %>%
+  tidyr::gather(key = "type", value = "num.reprseq",-annotation.index, -annotation, -category)
+mosaicism.underestimated.data$type = factor(mosaicism.underestimated.data$type,
+                                            levels = c(
+                                              'mosaic.by.ECOD.or.sequence',
+                                              'mosaic.by.ECOD.to.anything',
+                                              'mosaic.by.ECOD.to.annotated'))
+
+g=ggplot(mosaicism.underestimated.data) +
+  geom_bar(aes(y = annotation, x = num.reprseq, fill = category, col = category, alpha = type), stat = "identity", position  = "identity") +
+  scale_alpha_manual(values = c(mosaic.by.ECOD.to.annotated = 1,
+                                mosaic.by.ECOD.to.anything = 0.5, 
+                                mosaic.by.ECOD.or.sequence = 0.05)) +
+  #theme_bw() +
+  #scale_fill_manual(values = c(mosaic.only.within.class = "gray50",
+  #                              mosaic.to.other.class = "gray70", 
+  #                              mosaic.to.unknowns.only = "gray90")) +
+    scale_fill_manual(values = PHROG.COLOR.MAP) + 
+    scale_color_manual(values = PHROG.COLOR.MAP) + 
+   theme_minimal() + 
+    theme(strip.text.y = element_text(face = "bold", size = 7, angle = 360)) + 
+    labs(y = "", x = "Num. rHMMs with mosaic signal") +
+    scale_x_continuous(labels=function(x) sprintf("%.2f", x)) +
+    facet_grid(category ~ ., scales = "free", space = "free") +
+  guides(color = "none", fill = "none")
+  
+g
+ggsave(sprintf("%sFigure5/Figure5a_signal_of_mosaicism_within_and_outside_a_class_v5.pdf", OUTPUT.FIGURES.PATH), g,
+       width = 13, height = 7)
+ggsave(sprintf("%sFigure5/Figure5a_signal_of_mosaicism_within_and_outside_a_class_v5.png", OUTPUT.FIGURES.PATH), g, bg = "white",
+       width = 13, height = 7)
+
+```
+
+
+```{r, eval = FALSE}
+# proportions are not good because 35/1 loooks twice better than 35/2 which is not good
+
+
+diversity.top = data.table::fread(sprintf("%sFigure3/mosaicism.top.diverse.classes.txt", OUTPUT.FIGURES.PATH))
+mosaicism.underestimated.data = data.table::fread(sprintf("%sFigure5/mosaic.domain.classes.txt", OUTPUT.FIGURES.PATH)) %>%
+   select(annotation.index, annotation, category, num.families.mosaic.domain, num.families.mosaic.seq.or.domain, num.prot.mosaic.domain, num.prot.mosaic.to.anything.with.specific.annotation, num.prot.mosaic.domain.only.to.unpecific.or.excluded.class, num.mprot.mosaic.seq, num.prot.mosaic.seq.or.domain) 
+data.table::fwrite(mosaicism.underestimated.data, file = sprintf("%sFigure5/mosaicism.underestimated.data.txt", OUTPUT.FIGURES.PATH))
+
+mosaicism.underestimated.data = mosaicism.underestimated.data %>%
+  select(annotation.index, annotation, category, num.prot.mosaic.domain, num.prot.mosaic.seq.or.domain, num.prot.mosaic.to.anything.with.specific.annotation) %>%
+  inner_join(included.category.sizes %>% select(annotation.index, num.proteins)) %>%
+  inner_join(diversity.top %>% distinct(annotation, category), by = c("annotation", "category")) %>%
+  filter(!(annotation.index %in% unspecific.annotation.indices)) %>%
+  mutate(num.prot.nonmosaic.domain = num.proteins - num.prot.mosaic.domain,
+         num.prot.nonmosaic.seq.or.domain = num.proteins - num.prot.mosaic.seq.or.domain) %>%
+  mutate(odds.seq.to.ecod = (num.prot.mosaic.seq.or.domain/num.prot.nonmosaic.seq.or.domain)/(num.prot.mosaic.domain/num.prot.nonmosaic.domain),
+         prop.mosaic.by.ecod.with.any.known.pairmate = num.prot.mosaic.to.anything.with.specific.annotation/num.prot.mosaic.domain) %>%
+  rename(`odds ratio seq to ecod` = odds.seq.to.ecod,#num.prot.mosaic.domain.only.within.class.or.unspecific, 
+         `Prop. mosaic by ECOD\nwith any specific pairmate` =  prop.mosaic.by.ecod.with.any.known.pairmate) %>%
+  select(annotation, category, annotation.index, `odds ratio seq to ecod`, `Prop. mosaic by ECOD\nwith any specific pairmate`) %>%
+  tidyr::gather(key = "type", value = "prop",-annotation.index, -annotation, -category)
+mosaicism.underestimated.data$type = factor(mosaicism.underestimated.data$type,
+                                            levels = c(
+                                             "odds ratio seq to ecod",
+                                             "Prop. mosaic by ECOD\nwith any specific pairmate"))
+
+g=ggplot(mosaicism.underestimated.data, aes(y = annotation, x = prop, fill = category, col = category)) +
+  geom_bar(stat = "identity", width =0.7) +
+  facet_grid(category ~ type, scales = "free", space ="free_y") +
+  
+    scale_fill_manual(values = PHROG.COLOR.MAP) + 
+    scale_color_manual(values = PHROG.COLOR.MAP) + 
+   theme_minimal() + 
+    theme(strip.text.y = element_text(face = "bold", size = 7, angle = 360)) + 
+    labs(y = "", x = "Proportion") +
+    scale_x_continuous(labels=function(x) sprintf("%.2f", x)) +
+  guides(color = "none", fill = "none")
+  
+g
+ggsave(sprintf("%sFigure5/Figure5a_signal_of_mosaicism_within_and_outside_a_class_v7.pdf", OUTPUT.FIGURES.PATH), g,
+       width = 13, height = 7)
+ggsave(sprintf("%sFigure5/Figure5a_signal_of_mosaicism_within_and_outside_a_class_v7.png", OUTPUT.FIGURES.PATH), g, bg = "white",
+       width = 13, height = 7)
+
+
+
+
+
+
+
+mosaicism.underestimated.data = mosaic.domain.classes = data.table::fread(sprintf("%sFigure5/mosaic.domain.classes.txt", OUTPUT.FIGURES.PATH)) %>%
+  rename(`odds ratio seq to ecod` = odds.seq.to.ecod)  %>%
+  filter(pval.corr < 0.05) %>%
+  mutate(significant = if_else(pval.corr < 0.05, "*", "")) %>%
+  arrange(`odds ratio seq to ecod`)
+mosaicism.underestimated.data$annotation = factor(mosaicism.underestimated.data$annotation,
+                                                  levels = unique(mosaicism.underestimated.data$annotation))
+
+#%>%
+ #inner_join(diversity.top %>% distinct(annotation, category), by = c("annotation", "category")) 
+
+g=ggplot(mosaicism.underestimated.data, aes(y = annotation, x = `odds ratio seq to ecod`, fill = category, col = category)) +
+  geom_bar(stat = "identity", width =0.7) +
+  geom_text(aes(label = significant), nudge_x = 1) +
+  #facet_grid(category ~ ., scales = "free", space ="free_y") +
+    scale_fill_manual(values = PHROG.COLOR.MAP) + 
+    scale_color_manual(values = PHROG.COLOR.MAP) + 
+   theme_minimal() + 
+    theme(strip.text.y = element_text(face = "bold", size = 7, angle = 360)) + 
+    labs(y = "", x = "Odds of being mosaic by seq. to ECOD") +
+    scale_x_continuous(labels=function(x) sprintf("%.2f", x)) +
+  guides(color = "none", fill = "none")
+  
+g
+ggsave(sprintf("%sFigure5/Figure5a_signal_of_mosaicism_within_and_outside_a_class_v9.pdf", OUTPUT.FIGURES.PATH), g,
+       width = 13, height = 7)
+ggsave(sprintf("%sFigure5/Figure5a_signal_of_mosaicism_within_and_outside_a_class_v9.png", OUTPUT.FIGURES.PATH), g, bg = "white",
+       width = 13, height = 7)
+
+```
