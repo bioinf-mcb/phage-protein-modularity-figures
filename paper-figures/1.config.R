@@ -8,6 +8,8 @@ library(ggplot2)
 library(data.table)
 library(ggnetwork)
 library("xlsx")
+library(RColorBrewer)
+library(ggpubr)
 set.seed(1)
 options(stringsAsFactors = F)
 
@@ -61,7 +63,7 @@ MINIMUM.PROBABILITIES.FOR.ANNOTATION.EXPLORATION = sort(MINIMUM.PROBABILITIES.FO
 MAIN.COVS.FOR.ANNOTATION = sort(MAIN.COVS.FOR.ANNOTATION)
 ######################################################  create all necessary paths ###################################################### 
 #source(sprintf("%scode/protein-mosaicism/paper-figures/helpers.R", PROJECT.PATH))
-source("~/MGG Dropbox/Projects/divRBP/code/protein-mosaicism/paper-figures/helpers.R")
+source(sprintf("%scode/protein-mosaicism/paper-figures/helpers.R", PROJECT.PATH))
 DATA.PATH = sprintf("%s/phage-pp-workdir-refseq-hhblits/output/", PROJECT.PATH)
 
 # families
@@ -71,25 +73,25 @@ FAMILIES.FILEPATH = sprintf("%srafals-figures/data/families/family-table.txt",PR
 PROFILE.SIMILARITY.TABLE = sprintf("%srafals-figures/data/families/table_qcov-scov_all.txt", PROJECT.PATH)
 
 # all vs all / recent HGT pairs
-HHALIGN_RECENT_MOSAICISM_PATH = sprintf("%sprot-families/all-by-all/hhblits/table-hhr-hgt-hhalign.txt", DATA.PATH)
+#HHALIGN_RECENT_MOSAICISM_PATH = sprintf("%sprot-families/all-by-all/hhblits/table-hhr-hgt-hhalign.txt", DATA.PATH)
 
 # data from mmseq clustes from which the representative sequences were selected and the lengths of representative sequences
 CLUSTERING_RESULTS_PATH = sprintf("%sprot-families/representative/clustering.tsv", DATA.PATH)
-PROTEIN_NAMES_MAPPING_PATH = sprintf("%sprot-families/representative/name-table.txt", DATA.PATH)
+#PROTEIN_NAMES_MAPPING_PATH = sprintf("%sprot-families/representative/name-table.txt", DATA.PATH)
 NAME_TABLE_PATH = sprintf("%sprot-families/representative/name-table-full.txt", DATA.PATH)
 REPR.SEQ.LENGTH.FILENAME = sprintf("%sprot-families/representative/repr-seqs-lengths.txt", DATA.PATH)
 # data from HMM-HMM comparison results and annotation metadata
 PHROG.HHPRED.HITS.PATH = sprintf("%sprot-families/functional/hhblits-phrogs.txt", DATA.PATH)
 ECOD.DOMAIN.HITS.PATH = sprintf("%sprot-families/functional/hhblits-ecod.txt", DATA.PATH)
-PFAM.DOMAIN.HITS.PATH = sprintf("%sprot-families/functional/hhblits-pfam35.txt", DATA.PATH)
+#PFAM.DOMAIN.HITS.PATH = sprintf("%sprot-families/functional/hhblits-pfam35.txt", DATA.PATH)
 
 # downloaded from: http://prodata.swmed.edu/ecod/complete/distribution:
 ECOD.DOMAIN.DESCRIPTION.FILEPATH = sprintf("%sDatabases/ECOD/ECOD/ecod.develop283.domains.txt", DROPBOX.PATH)
 PHROG.TABLE.PATH = sprintf("%sDatabases/Phrogs/phrog_annot_v4.tsv", DROPBOX.PATH)
 MANUAL.PHROG.CLASS.MAPPING = sprintf("%sDatabases/Phrogs/custom/v3_phrogs-table-rafal-3_12.xlsx", DROPBOX.PATH) 
 # where to output tables and figures
-OUTPUT.DATA.PATH = sprintf("%spaper-figures/2023-05-22/tables/", PROJECT.PATH)
-OUTPUT.FIGURES.PATH = sprintf("%spaper-figures/2023-05-22/", PROJECT.PATH)
+OUTPUT.DATA.PATH = sprintf("%spaper-figures/2023-09-04/tables/", PROJECT.PATH)
+OUTPUT.FIGURES.PATH = sprintf("%spaper-figures/2023-09-04/", PROJECT.PATH)
 dir.create(OUTPUT.FIGURES.PATH, recursive = TRUE)
 dir.create(OUTPUT.DATA.PATH, recursive = TRUE)
 
@@ -98,6 +100,13 @@ UNKNOWN.ANNOTATION.INDEX = 10000
 GENERAL.ANTIDEFENSE.ANNOTATION.INDEX = 0
 ANTI_DEFENSE_DATA_TABLE_PATH = "/Users/bognasmug/MGG Dropbox/Projects/ECFs/data/phage-ECF-workdir-refseq-hhblits-102022/ecf-explorer/output/anti-defence/table-hhr-ad-rseq.txt"
 ANTI_DEFENSE_DESCRIPTION_PATH = "/Users/bognasmug/MGG Dropbox/Databases/Antidefense_Samuel&Burstein/custom/media-4-simplified_2023_04.xlsx"
+
+
+# metadata
+MIN.VIRULENT.BACPHLIP.SCORE = 0.9#0.75
+MAX.TEMPERATE.BACPHLIP.SCORE = 0.1#0.25
+#METADATA_PATH = "/Users/bognasmug/MGG Dropbox/Projects/divRBP/phage-pp-workdir-refseq-hhblits/input/metadata/refseq_metadata_new.csv"
+METADATA_PATH = "/Users/bognasmug/MGG Dropbox/Projects/divRBP/phage-pp-workdir-refseq-hhblits/input/metadata/refseq_metadata_updated_v3.csv"
 ######################################################## visual parameters ################################################################
 # theme for shiny-like plots
 theme.no.verical = theme(
@@ -141,3 +150,4 @@ dir.create(sprintf("%sFigure2", OUTPUT.FIGURES.PATH))
 dir.create(sprintf("%sFigure3", OUTPUT.FIGURES.PATH))
 dir.create(sprintf("%sFigure4", OUTPUT.FIGURES.PATH))
 dir.create(sprintf("%sFigure_Supplementary", OUTPUT.FIGURES.PATH))
+

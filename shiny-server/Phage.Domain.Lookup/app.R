@@ -1,5 +1,10 @@
 #
 # This is a Shiny web application. You can run the application by clicking
+# httr requires curl 5.0.2 which is not available
+# install older version of hhtr: install_version("httr", version = "1.4.2")
+
+
+
 # the 'Run App' button above.
 #
 # Find out more about building applications with Shiny here:
@@ -57,6 +62,7 @@ ui <- shinyUI(fluidPage(
                      selected = "T"),
             uiOutput("category_selection"),
             uiOutput("annotation_selection"),
+            downloadButton("downloadData", "Download"),
             #conditionalPanel(condition = "isvalidCategory",
             #                 uiOutput("annotation_selection")),
             conditionalPanel(condition="$('html').hasClass('shiny-busy')",
@@ -163,6 +169,19 @@ server <- shinyServer(function(input, output, session) {
       filter(annotation == input$Annotation & category == input$Category & domain.level == input$ecod_group) })
   progress$inc(100, detail = "Done")
   #print(head(this.tile.data))
+  
+  
+  output$downloadData <- downloadHandler(
+    filename = function() {
+      # Use the selected dataset as the suggested file name
+      paste0("domain_positions_",input$Annotation, ".csv")
+    },
+    content = function(file) {
+      # Write the dataset to the `file` that will be downloaded
+      write.csv(this.tile.data() %>% select(-row, -row.plus, -family), file)
+    }
+  )
+  
   
   isValid_input <- reactive({
     not.nulls = !is.null(input$Category) &  !is.null(input$Annotation) & !is.null(input$ecod_group)

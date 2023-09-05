@@ -1,0 +1,836 @@
+---
+title: "Untitled"
+author: "Bogna Smug"
+date: '2023-08-08'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+OUTPUT.FIGURES.METADATA.PATH = sprintf("%s/Metadata_analysis/",OUTPUT.FIGURES.PATH)
+dir.create(OUTPUT.FIGURES.METADATA.PATH)
+knitr::opts_chunk$set(echo = TRUE)
+unknown_words = c("unclassified", "unknown", "unspecified", "")
+# use Genus and Family for old NCBI taxonomy
+
+#sreprseq.metadata.table.txt for THRESHOLDS 0.75 and 0.25
+annotation.indices = data.table::fread(file = sprintf("%sannotation.indices",OUTPUT.DATA.PATH))
+surely.annotated.proteins = data.table::fread(sprintf("%ssurely.annotated.proteins.txt", OUTPUT.DATA.PATH))
+included.category.sizes = data.table::fread(file = sprintf("%sincluded.category.sizes",OUTPUT.DATA.PATH))
+diversity = data.table::fread(sprintf("%sFigure4/diversity.top.diverse.classes.txt", OUTPUT.FIGURES.PATH))
+top.diversity.classes = diversity %>% filter(data.type == "top.diversity") %>% distinct(annotation.index)
+all.proteins = data.table::fread(sprintf("%sall.proteins.txt", OUTPUT.DATA.PATH))
+name.table = read.table(NAME_TABLE_PATH, sep = ",", header = TRUE)
+unaccepted.genes = data.table::fread(file = sprintf("%sunaccepted.genes.txt",OUTPUT.DATA.PATH))
+seq.mosaic.pairs.all.pident = data.table::fread(sprintf("%sseq.mosaic.pairs.all.pident.txt", OUTPUT.DATA.PATH))
+qname.pairs.sharing.t.and.disshare.x = data.table::fread(sprintf("%sqname.pairs.sharing.t.and.disshare.x.txt", OUTPUT.DATA.PATH))
+recent_HGT_pairs_raw.70 = data.table::fread(sprintf("%sFigure_Supplementary/network_recent_HGT/recent_HGT_pars_70.txt", OUTPUT.FIGURES.PATH))
+
+
+
+metadata = data.table::fread(file = sprintf("%smetadata.txt", OUTPUT.DATA.PATH)) %>%
+  select(-Genus, - Family) %>%
+  rename(Genus = Genus_ICTV_38, Family = Family_ICTV38) %>%
+  mutate(Genus = if_else(Genus == "", "unknown", Genus),
+         Family = if_else(Family == "", "unknown", Family),
+         Host = if_else(Host == "", "unknown", Host))
+
+reprseq.metadata.table = data.table::fread(file = sprintf("%sreprseq.metadata.table_p09.txt", OUTPUT.DATA.PATH)) %>%
+  select(-genus, - family) %>%
+  rename(genus = genus_ICTV38, family = family_ICTV38) %>%
+  mutate(genus = if_else(genus == "", "unknown", genus),
+         family = if_else(family == "", "unknown", family))
+
+```
+
+```{r}
+sure.annotations.from.top.diversity = surely.annotated.proteins %>%
+  inner_join(top.diversity.classes %>% distinct(annotation.index))
+
+
+# one row per each protein in each genome
+all.proteins.in.genomes = name.table %>%
+  mutate(Accession =sub("\\..*", "", ncbi.id)) %>%
+  left_join(metadata, by = "Accession") %>%
+  left_join(all.proteins %>% select(repr.name = qname, has.unknown.function, mosaic, mosaic.domain))
+all.proteins.in.genomes$lifestyle[is.na(all.proteins.in.genomes$lifestyle) | all.proteins.in.genomes$lifestyle %in% unknown_words] = "unknown"
+all.proteins.in.genomes$Family[is.na(all.proteins.in.genomes$Family) | all.proteins.in.genomes$Family %in% unknown_words] = "unknown"
+all.proteins.in.genomes$Genus[is.na(all.proteins.in.genomes$Genus) | all.proteins.in.genomes$Genus %in% unknown_words] = "unknown"
+all.proteins.in.genomes$Host[is.na(all.proteins.in.genomes$Host) | all.proteins.in.genomes$Host %in% unknown_words] = "unknown"
+
+
+
+genome.sizes.per.tax.family = all.proteins.in.genomes %>%
+  group_by(Accession, lifestyle, Genus, Family) %>%
+  summarise(genome.size = n_distinct(ncbi.id)) %>%
+  group_by(Family) %>%
+  summarise(av.genome.size = ceiling(median(genome.size)))
+
+
+genomes.per.host = all.proteins.in.genomes %>%  
+           left_join(name.table) %>%
+            mutate(Accession =sub("\\..*", "", ncbi.id)) %>% 
+            mutate(Host = if_else(is.na(Host), "unknown", Host)) %>%
+            group_by(Host) %>% 
+            summarise(n.genomes = n_distinct(Accession)) %>%
+           ungroup() %>%
+          mutate(big = n.genomes >= 50)
+
+genomes.per.genus = all.proteins.in.genomes %>%
+   group_by(Accession, lifestyle, Genus, Family) %>%
+  summarise(genome.size = n_distinct(ncbi.id)) %>%
+  ungroup() %>%
+  group_by(Family) %>%
+  mutate(num.genomes.per.family = n_distinct(Accession),
+         av.genome.size.per.family = ceiling(median(genome.size))) %>%
+  ungroup %>%
+  group_by(Genus, Family, num.genomes.per.family, av.genome.size.per.family) %>%
+  summarise(av.genome.size = median(genome.size),
+            num.genomes = n_distinct(Accession)) %>%
+  ungroup() %>%
+  mutate(big.fam = num.genomes.per.family >= 50)
+
+
+
+sequence.mosaic.reprseq.pairs = seq.mosaic.pairs.all.pident %>% filter(mosaic) %>% distinct(reprseq.pair)
+domain.mosaic.reprseq.pairs = qname.pairs.sharing.t.and.disshare.x %>% distinct(reprseq.pair)
+mosaic.reprseq.pairs = rbind(sequence.mosaic.reprseq.pairs, domain.mosaic.reprseq.pairs) %>% distinct(reprseq.pair)
+mosaic.reprseq.pairs.wide = rbind(mosaic.reprseq.pairs %>% tidyr::separate(col = "reprseq.pair", into = c("qname", "sname"), sep = "&", remove = FALSE) %>% select(reprseq.pair, qname, sname),
+                                        mosaic.reprseq.pairs %>% tidyr::separate(col = "reprseq.pair", into = c("sname", "qname"), sep = "&", remove = FALSE) %>% select(reprseq.pair, qname, sname))
+```
+
+
+
+
+
+RNA vs DNA genomes, we know that many RNA genomes are missing in our table
+```{r}
+all.proteins.in.genomes %>% group_by(GeneticMaterial) %>% summarise(num.genomes = n_distinct(Accession))
+
+```
+
+
+
+#Lt's look at taxonomy an lifestyle of all proteins: mosaic and non-mosaic
+- mosaic proteins are slightly more often seen in temperate than virulent rHMMs
+
+
+```{r}
+all.proteins.in.genomes.dat = all.proteins.in.genomes %>%
+  group_by(Accession, lifestyle) %>%
+  summarise(num.genes.in.genome = n_distinct(repr.name),
+         num.mosaic.genes.in.genome = n_distinct(repr.name[mosaic]),
+         num.domain.mosaic.genes.in.genome = n_distinct(repr.name[mosaic.domain])) %>%
+  mutate(prop.mosaic.genes.in.genome = num.mosaic.genes.in.genome/num.genes.in.genome,
+         prop.domain.mosaic.genes.in.genome = num.domain.mosaic.genes.in.genome/num.genes.in.genome)
+
+all.proteins.in.genomes.dat %>%
+  group_by(lifestyle) %>%
+  summarise(num.genomes = n_distinct(Accession),
+            av.num.mosaic.genes.in.genome = mean(num.mosaic.genes.in.genome),
+            av.prop.mosaic.genes.in.genome = mean(prop.mosaic.genes.in.genome),
+            num.genomes.with.any.mosaic.gene = n_distinct(Accession[num.mosaic.genes.in.genome > 0]), 
+            prop.genomes.with.any.mosaic.gene = n_distinct(Accession[num.mosaic.genes.in.genome > 0])/num.genomes)
+
+
+g=ggplot(all.proteins.in.genomes.dat %>% filter(lifestyle %in% c("temperate", "virulent")),
+         aes(x=lifestyle, y = prop.mosaic.genes.in.genome)) + 
+  geom_jitter(aes(col = lifestyle), size = 0.5, alpha = 0.3)+
+  #geom_histogram(aes(x=prop.mosaic.genes.in.genome, fill = lifestyle), alpha = 0.5) + facet_grid(lifestyle ~.)
+  geom_boxplot(alpha = 0.3) + 
+  theme_bw() +
+  stat_compare_means(method.args = list(alternative  = "greater"))
+g
+ggsave(g, filename = sprintf("%sprop_mosaic_genes_per_genome_and_lifestyle.png", OUTPUT.FIGURES.METADATA.PATH), bg = "white", width = 6, height = 4)  
+
+
+
+wilcox.test(x = all.proteins.in.genomes.dat %>% filter(lifestyle %in% c("virulent")) %>% pull(prop.mosaic.genes.in.genome),
+            y = all.proteins.in.genomes.dat %>% filter(lifestyle %in% c("temperate")) %>% pull(prop.mosaic.genes.in.genome),
+            alternative = "less"
+            )$p.value
+```
+
+# Here we compare num mosaic reprseqs that are only in virulent vs only in temperate phages
+```{r}
+
+all.reprseqs.with.metadata = all.proteins %>%
+  select(qname, mosaic, mosaic.domain, has.unknown.function) %>%
+  left_join(reprseq.metadata.table %>% rename(qname = repr.name))
+
+num.virulent.prot = all.reprseqs.with.metadata %>% filter(lifestyle == "virulent") %>% nrow()
+num.virulent.mosaic.prot = all.reprseqs.with.metadata %>% filter(lifestyle == "virulent" & mosaic) %>% nrow()
+num.virulent.non.mosaic.prot = all.reprseqs.with.metadata %>% filter(lifestyle == "virulent" & !mosaic) %>% nrow()
+
+num.temperate.prot = all.reprseqs.with.metadata %>% filter(lifestyle == "temperate") %>% nrow()
+num.temperate.mosaic.prot = all.reprseqs.with.metadata %>% filter(lifestyle == "temperate" & mosaic) %>% nrow()
+num.temperate.non.mosaic.prot = all.reprseqs.with.metadata %>% filter(lifestyle == "temperate" & !mosaic) %>% nrow()
+
+
+
+# 11 % of virulent rHMMs are mosaic and 14% of temperate rHMMs are mosaic
+num.virulent.mosaic.prot/num.virulent.prot
+num.temperate.mosaic.prot/num.temperate.prot
+
+
+    M1 = matrix(0, nrow=2, ncol = 2)
+    M1[1,1] = num.virulent.mosaic.prot
+    M1[1,2] = num.virulent.non.mosaic.prot
+    M1[2,1] = num.temperate.mosaic.prot
+    M1[2,2] = num.temperate.non.mosaic.prot
+   chisq.test(M1)
+
+
+```
+
+
+```{r}
+all.proteins.in.genomes.dat.by.Family= all.proteins.in.genomes %>%
+  group_by(Accession, Family) %>%
+  summarise(num.genes.in.genome = n_distinct(repr.name),
+         num.mosaic.genes.in.genome = n_distinct(repr.name[mosaic]),
+         num.domain.mosaic.genes.in.genome = n_distinct(repr.name[mosaic.domain])
+         ) %>%
+  mutate(prop.mosaic.genes.in.genome = num.mosaic.genes.in.genome/num.genes.in.genome,
+         prop.domain.mosaic.genes.in.genome = num.domain.mosaic.genes.in.genome/num.genes.in.genome
+         ) %>%
+  left_join(genomes.per.genus %>% distinct(Family, num.genomes.per.family,  av.genome.size.per.family, big.fam)) %>%
+  rowwise() %>%
+  filter(Family != "unknown") %>% 
+  mutate(Family = paste0(Family, "\n", num.genomes.per.family, " genomes\n", "av. genome size:",av.genome.size.per.family)) %>%
+  arrange(av.genome.size.per.family)
+
+
+
+kwresult = kruskal.test(prop.mosaic.genes.in.genome ~ Family, data = all.proteins.in.genomes.dat.by.Family)
+
+
+
+all.proteins.in.genomes.dat.by.Family$Family = factor(all.proteins.in.genomes.dat.by.Family$Family, levels = unique(all.proteins.in.genomes.dat.by.Family$Family))
+g=ggplot(all.proteins.in.genomes.dat.by.Family %>% filter(big.fam),
+         aes(x=Family, y = prop.mosaic.genes.in.genome)) + 
+  geom_jitter(aes(col = Family), size = 0.5, alpha = 0.3) +
+  stat_compare_means() +
+  #geom_histogram(aes(x=prop.mosaic.genes.in.genome, fill = lifestyle), alpha = 0.5) + facet_grid(lifestyle ~.)
+  geom_boxplot(alpha = 0.3) + 
+  #geom_label(x="Straboviridae", y = 0.3, label = paste0("Kruskal-Wallis: ", as.numeric(kwresult$statistic),
+  #                                                         "\np=", as.numeric(kwresult$p.value))) +
+  theme_bw() +
+    theme(axis.text.x = element_text(angle = 45, hjust =1,vjust=1, size = 8),
+        axis.text.y = element_text(hjust = 1,vjust=0.5, size = 8),
+        strip.text.y = element_text(face = "bold", size = 8, angle = 360),
+        strip.text.x = element_text(face = "bold", size = 8, angle = 360)) +
+  guides(col ="none") +
+  xlab("")
+g
+ggsave(g, filename = sprintf("%sprop_mosaic_genes_per_genome_and_TaxFam.png", OUTPUT.FIGURES.METADATA.PATH), bg = "white", width = 8, height = 6)  
+
+
+```
+
+
+
+```{r}
+all.proteins.in.genomes.dat.by.host = all.proteins.in.genomes %>%
+  group_by(Accession, Host) %>%
+  summarise(num.genes.in.genome = n_distinct(repr.name),
+         num.mosaic.genes.in.genome = n_distinct(repr.name[mosaic]),
+         num.domain.mosaic.genes.in.genome = n_distinct(repr.name[mosaic.domain])
+         ) %>%
+  mutate(prop.mosaic.genes.in.genome = num.mosaic.genes.in.genome/num.genes.in.genome,
+         prop.domain.mosaic.genes.in.genome = num.domain.mosaic.genes.in.genome/num.genes.in.genome
+         ) %>%
+  left_join(genomes.per.host) %>%
+  rowwise() %>%
+  filter(Host != "unknown") %>% 
+  mutate(Host = paste0(Host, "\n", n.genomes, " genomes")) 
+
+medians = all.proteins.in.genomes.dat.by.host %>%
+  group_by(Host) %>%
+  summarise(av = median(prop.mosaic.genes.in.genome)) %>%
+  ungroup() %>%
+  arrange(desc(av))
+
+
+
+kwresult = kruskal.test(prop.mosaic.genes.in.genome ~ Host, data = all.proteins.in.genomes.dat.by.host)
+
+
+
+all.proteins.in.genomes.dat.by.host$Host = factor(all.proteins.in.genomes.dat.by.host$Host, levels = unique(medians$Host))
+g=ggplot(all.proteins.in.genomes.dat.by.host %>% filter(big),
+         aes(x=Host, y = prop.mosaic.genes.in.genome)) + 
+  geom_jitter(aes(col = Host), size = 0.5, alpha = 0.3) +
+  stat_compare_means() +
+  #geom_histogram(aes(x=prop.mosaic.genes.in.genome, fill = lifestyle), alpha = 0.5) + facet_grid(lifestyle ~.)
+  geom_boxplot(alpha = 0.3) + 
+  #geom_label(x="Straboviridae", y = 0.3, label = paste0("Kruskal-Wallis: ", as.numeric(kwresult$statistic),
+  #                                                         "\np=", as.numeric(kwresult$p.value))) +
+  theme_bw() +
+    theme(axis.text.x = element_text(angle = 45, hjust =1,vjust=1, size = 8),
+        axis.text.y = element_text(hjust = 1,vjust=0.5, size = 8),
+        strip.text.y = element_text(face = "bold", size = 8, angle = 360),
+        strip.text.x = element_text(face = "bold", size = 8, angle = 360)) +
+  guides(col ="none") +
+  xlab("")
+g
+ggsave(g, filename = sprintf("%sprop_mosaic_genes_per_genome_and_Host.png", OUTPUT.FIGURES.METADATA.PATH), bg = "white", width = 12, height = 6)  
+
+
+```
+
+
+
+# taxonomic family and function vs signal of mosaicism
+```{r}
+functions.per.family = all.proteins.in.genomes %>%
+  rename(qname = repr.name) %>%
+  left_join(surely.annotated.proteins) %>%
+  group_by(annotation.index, Genus, Family) %>%
+  summarise(num.genomes.this.function = n_distinct(Accession),
+            num.genomes.with.this.function.mosaic = n_distinct(Accession[mosaic]),
+            num.genomes.with.this.function.mosaic.domain = n_distinct(Accession[mosaic.domain])) %>%
+  left_join(genomes.per.genus, by = c("Genus","Family")) %>%
+  mutate(prop.genomes.with.this.function = num.genomes.this.function/num.genomes,
+         prop.mosaic = num.genomes.with.this.function.mosaic/num.genomes.this.function,
+         prop.mosaic.domain = num.genomes.with.this.function.mosaic.domain/num.genomes.this.function) %>%
+  left_join(annotation.indices) %>%
+  filter(num.genomes >= 20 & !is.na(Family)) %>%
+  inner_join(top.diversity.classes %>% distinct(annotation.index)) %>%
+  mutate(family = paste0(Genus, "\n", Family, "\n", num.genomes, " genomes", "\nav. genome size: ", av.genome.size))
+functions.per.family$family = factor(functions.per.family$family, levels = functions.per.family %>% arrange(desc(num.genomes.per.family), desc(num.genomes)) %>% pull(family) %>% unique())
+functions.per.family$Family = factor(functions.per.family$Family, levels = functions.per.family %>% arrange(desc(num.genomes.per.family)) %>% pull(Family) %>% unique())
+
+  
+  
+  functions.per.family$Family = factor(functions.per.family$Family, levels = functions.per.family %>% arrange(desc(num.genomes.per.family)) %>% pull(Family) %>% unique())
+  g=ggplot(functions.per.family  %>% 
+             ungroup() %>%
+             filter(Genus != "unknown") %>% 
+             select(Family, family, annotation, category, prop.genomes.with.this.function, prop.mosaic) %>%
+    tidyr::complete(tidyr::nesting(Family, family), tidyr::nesting(annotation, category), fill  = list(prop.genomes.with.this.function = 0, prop.mosaic = 0)) )+
+  geom_tile(aes(x = family, y =annotation , alpha = prop.genomes.with.this.function, fill = prop.mosaic)) + #, hjust = 0, vjust = 0
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust =1,vjust=1, size = 8),
+        axis.text.y = element_text(hjust = 1,vjust=0.5, size = 8),
+        strip.text.y = element_text(face = "bold", size = 8, angle = 360),
+        strip.text.x = element_text(face = "bold", size = 8, angle = 360)) +
+  facet_grid(category ~ Family, scales = "free", space = "free",
+             labeller = labeller(category = phrog.class.labels)) + 
+  xlab("") + ylab("") +
+  scale_fill_gradient(name = "% mosaic", low = "beige", high = "darkred")
+g  
+  ggsave(g, filename = sprintf("%sfunctions_vs_taxonomy_family_an_genus3.png", OUTPUT.FIGURES.METADATA.PATH), bg = "white", width =30, height =15)  
+  
+  
+
+```
+
+
+# same for temperate vs virulent phages
+
+```{r}
+genomes.per.lifestyle = 
+all.proteins.in.genomes %>%
+  rename(qname = repr.name) %>%
+  group_by(lifestyle) %>%
+  mutate(num.genomes.in.lifestyle = n_distinct(Accession)) %>%
+  group_by(Accession, lifestyle, num.genomes.in.lifestyle) %>%
+  summarise(genome.size = n_distinct(ncbi.id)) %>%
+  group_by(lifestyle, num.genomes.in.lifestyle) %>%
+  summarise(av.genome.size = median(genome.size),
+            num.genomes = n_distinct(Accession)) 
+
+
+functions.per.lifestyle = all.proteins.in.genomes %>%
+  rename(qname = repr.name) %>%
+  left_join(surely.annotated.proteins) %>%
+  group_by(annotation.index, lifestyle) %>%
+  summarise(num.genomes.this.function = n_distinct(Accession),
+            num.genomes.with.this.function.mosaic = n_distinct(Accession[mosaic]),
+            num.genomes.with.this.function.mosaic.domain = n_distinct(Accession[mosaic.domain])) %>%
+  left_join(genomes.per.lifestyle, by = c("lifestyle")) %>%
+  mutate(prop.genomes.with.this.function = num.genomes.this.function/num.genomes,
+         prop.mosaic = num.genomes.with.this.function.mosaic/num.genomes.this.function,
+         prop.mosaic.domain = num.genomes.with.this.function.mosaic.domain/num.genomes.this.function) %>%
+  left_join(annotation.indices) %>%
+  inner_join(top.diversity.classes %>% distinct(annotation.index))  %>% 
+  filter(lifestyle != "unknown" & !is.na(lifestyle)) %>%
+  mutate(lifestyle = paste0(lifestyle, "\n", num.genomes, " genomes", "\nav. genome size: ", av.genome.size))
+
+  
+    g=ggplot(functions.per.lifestyle) +
+  geom_col(aes(y =annotation, x = prop.genomes.with.this.function, fill = prop.mosaic)) + #, hjust = 0, vjust = 0
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust =1,vjust=1, size = 8),
+        axis.text.y = element_text(hjust = 1,vjust=0.5, size = 8),
+        strip.text.y = element_text(face = "bold", size = 8, angle = 360),
+        strip.text.x = element_text(face = "bold", size = 8, angle = 360)) +
+  facet_grid(category ~ lifestyle, scales = "free", space = "free",
+             labeller = labeller(category = phrog.class.labels)) + 
+  ylab("") + xlab("% Genomes with this function") +
+  scale_fill_gradient(name = "% mosaic", low = "beige", high = "darkred")
+g  
+  ggsave(g, filename = sprintf("%sfunctions_vs_lifestyle_mosaicism.png", OUTPUT.FIGURES.METADATA.PATH), bg = "white", width =10, height =15)  
+
+```
+
+
+
+# looking at the rect mosaicism:
+
+## pairs from different lifestyles
+```{r}
+recentHGT.with.metadata = recent_HGT_pairs_raw.70 %>%
+  left_join(reprseq.metadata.table %>% select(qname = repr.name, qfamily = family, qlifestyle = lifestyle, qhost = host, qnum.genomes.with.this.rHMM = num.genomes.with.this.rHMM)) %>%
+  left_join(reprseq.metadata.table %>% select(sname = repr.name, sfamily = family, slifestyle = lifestyle, shost = host, snum.genomes.with.this.rHMM = num.genomes.with.this.rHMM)) %>%
+  rowwise() %>%
+  mutate(pair.lifestyle = CreatePair(qlifestyle, slifestyle, collapse = " & "),
+         pair.family = CreatePair(qfamily, sfamily, collapse = " & "),
+         reprseq.pair = CreatePair(qname, sname, collapse = "&"),
+         host.pair = CreatePair(qhost, shost, collapse = "&")) %>%
+  mutate(known.lifestyle = (pair.lifestyle %in% c("virulent & virulent", "temperate & temperate", "temperate & virulent")),
+         multi.lifestyle = qlifestyle == "multi" | slifestyle == "multi",
+         known.family = qfamily != "unknown"  & sfamily != "unknown",
+         known.host  = qhost != "unknown" & shost != "unknown") %>%
+  mutate(pair.lifestyle = if_else(multi.lifestyle, "multi", if_else(known.lifestyle, pair.lifestyle, "unknown")),
+         pair.family = if_else(known.family, pair.family, "unknown"),
+         host.pair = if_else(known.host, host.pair, "unknown"))
+
+
+recentHGT.with.metadata %>% filter(pair.lifestyle == "temperate & virulent" & !is.na(qindex) & !is.na(sindex)) %>%
+  left_join(name.table %>% select(qname = repr.name, qncbi.id = ncbi.id)) %>%
+  left_join(name.table %>% select(sname = repr.name, sncbi.id = ncbi.id)) %>%
+  distinct(qindex, qncbi.id, sncbi.id)
+
+# we have 1 pair of spike rHMM mosaic between only virulent and only temerate
+
+# and 3 pairs of fibers rHMMs mosaic between only virulent and temperate
+
+# additionally there are pairs that include rHMM that is found in both virulent and temperate
+
+
+# Tail spike: NC_031924.1 (33317-36247(+)) - found as tail spike according to NCBI, this is a Salmonella phage, found by bacphlip as virulent
+# MOSAIC WITH NC_054641.1:29238-31259(-: lfestyle of " NC_054641.1" is unknown accroding to bachlip but according to NCBI it is lytic!!
+# and  NC_042346.1:14178-16163(+) : found as tail spike according to NCBI lifestyle = temperate, 
+# and 	NC_054647.1:8557-10578(-) which has unknown lifestyle
+
+# tail fibers:
+# NC_014636.1:76160-80101(+): virulent T4 like Aeromonas phage, tail fiber protein; virulent according to bacphlip and literature (https://pubmed.ncbi.nlm.nih.gov/22226819/)
+# AND Escherichia phage D108,	NC_013594.1:31507-33009(+) tail fiber protein, temperate according to bachlip and literature (Escherichia phage D108), tail fiber protein
+# AND Enterobacteria phage Mu NC_000929.1:31458-32972(+) tail fiber protein, temperate according to bacphlip and literature
+```
+
+
+
+# RECENT MOSAICISM N ENTIRE GENOME METADATA
+
+
+```{r}
+Get.Taxa.And.Lifestyle.Genome.Pairs = function(recent.pairs.with.metadata, top.diversity.classes) {
+   recent.pairs.with.metadata.tb = recent.pairs.with.metadata %>% as.data.table()
+   recent.pairs.with.metadata.tb[, known.lifestyle := qlifestyle !="unknown" & slifestyle != "unknown"]
+   recent.pairs.with.metadata.tb[, known.genus := qGenus !="unknown" & sGenus != "unknown" & qGenus != "Unclassified" & sGenus != "Unclassified"]
+   recent.pairs.with.metadata.tb[, known.fam := qfamily !="unknown" & sfamily != "unknown" & qfamily != "Unclassified" & sfamily != "Unclassified"]
+   recent.pairs.with.metadata.tb[, same.l := if_else(!known.lifestyle, "unknwon", if_else(qlifestyle == slifestyle, "same", "different"))]
+      
+recent.pairs.with.metadata.l = recent.pairs.with.metadata.tb %>%
+  rename(same = same.l) %>%
+    group_by(annotation.index, same) %>%
+    summarise(n = n_distinct(genome.pair)) %>%
+    right_join(top.diversity.classes) 
+ 
+
+  
+  recent.pairs.with.metadata.tg = recent.pairs.with.metadata.tb %>%
+    #rowwise() %>%
+    #mutate(tg.pair = CreatePair(qGenus, sGenus, collapse = " - ")) %>%
+    mutate(same = if_else(!known.genus, "unknown", if_else(qGenus == sGenus, "same", "different"))) %>%
+    group_by(annotation.index, same) %>%
+    summarise(n = n_distinct(genome.pair))
+  
+  
+  
+  recent.pairs.with.metadata.fam = recent.pairs.with.metadata.tb %>%
+    #rowwise() %>%
+    #mutate(fam.pair = CreatePair(qfamily, sfamily, collapse = " - ")) %>%
+    mutate(same = if_else(!known.fam, "unknown", if_else(qfamily == sfamily, "same", "different"))) %>%
+    group_by(annotation.index, same) %>%
+    summarise(n = n_distinct(genome.pair)) %>%
+    right_join(top.diversity.classes) 
+
+  
+  
+  recent.pairs.meta.all = recent.pairs.with.metadata.l %>% mutate(type = "lifestyle") %>% select(annotation.index, same, n, type) %>%
+    rbind(recent.pairs.with.metadata.fam %>% mutate(type = "family") %>% select(annotation.index, same, n, type)) %>%
+    rbind(recent.pairs.with.metadata.tg %>% mutate(type = "genus") %>% select(annotation.index, same, n, type)) %>%
+    left_join(annotation.indices)  %>%
+    right_join(top.diversity.classes) 
+  recent.pairs.meta.all$n[is.na(recent.pairs.meta.all$n)] = 0
+  recent.pairs.meta.all$same[is.na(recent.pairs.meta.all$same)] = "unknwon"
+  
+  return(recent.pairs.meta.all)
+}
+
+recent.pairs.with.metadata = recent_HGT_pairs_raw.70 %>%
+  left_join(all.proteins.in.genomes %>% distinct(qgenome = Accession, qname = repr.name, qlifestyle = lifestyle, qGenus = Genus, qfamily = Family)) %>%
+  left_join(all.proteins.in.genomes %>% distinct(sgenome = Accession, sname = repr.name, slifestyle = lifestyle, sGenus = Genus, sfamily = Family)) %>%
+  filter(qindex == sindex) %>%  
+  rename(annotation.index = qindex) %>%
+  inner_join(top.diversity.classes %>% distinct(annotation.index)) %>%
+  rowwise() %>%
+  mutate(genome.pair = CreatePair(qgenome, sgenome)) 
+
+
+
+recent.pairs.meta.all = Get.Taxa.And.Lifestyle.Genome.Pairs(recent.pairs.with.metadata, top.diversity.classes) 
+text.size = 8
+g=ggplot(recent.pairs.meta.all %>% filter(n > 0)) +
+  geom_col(aes(x = annotation, y = n, fill = same)) +
+  facet_grid(category ~type, scales = "free", space = "free",
+             labeller = labeller(category = phrog.class.labels)) +
+  coord_flip() +
+  theme_bw() +
+  theme( axis.title.y.right = element_text(size = text.size),
+         axis.text.y.right = element_text(size = text.size),
+          axis.title.y = element_text( size = text.size),
+         axis.text.y = element_text(size = text.size),
+  ) +
+  ylab("Num. pairs genomes") +
+  xlab("") +
+  #scale_y_log10() +
+ #scale_y_log10() +
+  #scale_fill_manual()
+  scale_fill_manual(values = c("same" = "darkgreen", "different" = "orange", "unknown" = "gray"))
+g
+ggsave(g, filename = sprintf("%sreceent_pairs_meta.png", OUTPUT.FIGURES.METADATA.PATH), bg = "white", width = 10, height = 6)  
+
+```
+
+
+
+
+# Let's do the same of pairs of rHMM families
+# it is a bit more tricky because a pair of mosaic tail fibers may actually mean that a tail spike within some family where a tail fiber exist was mosaic 
+# Also we will nly look at rHMM families that are found ONLY in one lifestyle/genus
+
+
+# Same of represeqs
+```{r}
+
+
+
+Get.Taxa.And.Lifestyle.Fam.Pairs = function(mosaic.pairs.lifestyle2, unclear.name = "unknown") {
+    mosaic.pairs.lifestyle2$genus.x[is.na(mosaic.pairs.lifestyle2$genus.x)] = unclear.name
+    mosaic.pairs.lifestyle2$genus.x[mosaic.pairs.lifestyle2$genus.x == "Unclassified"] = unclear.name
+    mosaic.pairs.lifestyle2$family.x[is.na(mosaic.pairs.lifestyle2$family.x)] = unclear.name
+    mosaic.pairs.lifestyle2$family.x[mosaic.pairs.lifestyle2$family.x == "Unclassified"] = unclear.name
+    mosaic.pairs.lifestyle2$genus.y[is.na(mosaic.pairs.lifestyle2$genus.y)] = unclear.name
+    mosaic.pairs.lifestyle2$genus.y[mosaic.pairs.lifestyle2$genus.y == "Unclassified"] = unclear.name
+    mosaic.pairs.lifestyle2$family.y[is.na(mosaic.pairs.lifestyle2$family.y)] = unclear.name
+    mosaic.pairs.lifestyle2$family.y[mosaic.pairs.lifestyle2$family.y == "Unclassified"] = unclear.name
+    mosaic.pairs.lifestyle2$lifestyle.x[mosaic.pairs.lifestyle2$lifestyle.x == ""] = unclear.name
+    mosaic.pairs.lifestyle2$lifestyle.x[is.na(mosaic.pairs.lifestyle2$lifestyle.x)] = unclear.name
+    mosaic.pairs.lifestyle2$lifestyle.y[mosaic.pairs.lifestyle2$lifestyle.y == ""] = unclear.name
+    mosaic.pairs.lifestyle2$lifestyle.y[is.na(mosaic.pairs.lifestyle2$lifestyle.y)] = unclear.name
+    mosaic.pairs.lifestyle2$host.x[mosaic.pairs.lifestyle2$host.x == ""] = unclear.name
+    mosaic.pairs.lifestyle2$host.x[is.na(mosaic.pairs.lifestyle2$host.x)] = unclear.name
+    mosaic.pairs.lifestyle2$host.y[mosaic.pairs.lifestyle2$host.y == ""] = unclear.name
+    mosaic.pairs.lifestyle2$host.y[is.na(mosaic.pairs.lifestyle2$host.y)] = unclear.name
+
+    
+   mosaic.pairs.lifestyle2.tb = mosaic.pairs.lifestyle2 %>% as.data.table()
+   mosaic.pairs.lifestyle2.tb[, known.lifestyle := lifestyle.x !="unknown" & lifestyle.y != "unknown"]
+   mosaic.pairs.lifestyle2.tb[, known.genus := genus.x !="unknown" & genus.y != "unknown"]
+   mosaic.pairs.lifestyle2.tb[, known.fam := family.x !="unknown" & family.y != "unknown"]
+   mosaic.pairs.lifestyle2.tb[, known.host := host.x !="unknown" & host.y != "unknown"]
+   mosaic.pairs.lifestyle2.tb[, multi.lifestyle := lifestyle.x == "multi" | lifestyle.y == "multi"]
+   mosaic.pairs.lifestyle2.tb[, multi.genus := genus.x == "multi"  | genus.y == "multi" ]
+   mosaic.pairs.lifestyle2.tb[, multi.fam := family.x == "multi"  | family.y == "multi" ]
+   mosaic.pairs.lifestyle2.tb[, multi.host := host.x == "multi"  | host.y == "multi" ]
+   mosaic.pairs.lifestyle2.tb[, same.l := if_else(!known.lifestyle, "at least \none rHMM \nin the pair\nhas unknown trait", if_else(multi.lifestyle, "at least \none rHMM \nin the pair \n is present in\ngenomes of different traits", if_else(lifestyle.x == lifestyle.y, "same trait", "different trait")))]
+   mosaic.pairs.lifestyle2.tb[, same.g := if_else(!known.genus, "at least \none rHMM \nin the pair\nhas unknown trait", if_else(multi.genus, "at least \none rHMM \nin the pair \n is present in\ngenomes of different traits", if_else(genus.x == genus.y, "same trait", "different trait")))]
+   mosaic.pairs.lifestyle2.tb[, same.f := if_else(!known.fam, "at least \none rHMM \nin the pair\nhas unknown trait", if_else(multi.fam, "at least \none rHMM \nin the pair \n is present in\ngenomes of different traits", if_else(family.x == family.y, "same trait", "different trait")))]
+   mosaic.pairs.lifestyle2.tb[, same.h := if_else(!known.host, "at least \none rHMM \nin the pair\nhas unknown trait", if_else(multi.host, "at least \none rHMM \nin the pair \n is present in\ngenomes of different traits", if_else(host.x == host.y, "same trait", "different trait")))]
+   
+      
+  all.fam.pairs.with.metadata.l = mosaic.pairs.lifestyle2.tb %>%
+    rename(same = same.l) %>%
+      group_by(annotation.index, same) %>%
+      summarise(n = n_distinct(pair)) 
+ 
+  all.fam.pairs.with.metadata.tg = mosaic.pairs.lifestyle2.tb %>%
+    rename(same = same.g) %>%
+    group_by(annotation.index, same) %>%
+    summarise(n = n_distinct(pair))
+
+  
+  all.fam.pairs.with.metadata.fam = mosaic.pairs.lifestyle2.tb %>%
+    rename(same = same.f) %>%
+    group_by(annotation.index, same) %>%
+    summarise(n = n_distinct(pair)) %>%
+    right_join(top.diversity.classes) 
+
+  all.fam.pairs.with.metadata.host = mosaic.pairs.lifestyle2.tb %>%
+    rename(same = same.h) %>%
+    group_by(annotation.index, same) %>%
+    summarise(n = n_distinct(pair)) 
+    
+  
+  all.fam.pairs.meta.all = all.fam.pairs.with.metadata.l %>% mutate(type = "lifestyle") %>% select(annotation.index, same, n, type) %>%
+    rbind(all.fam.pairs.with.metadata.fam %>% mutate(type = "family") %>% select(annotation.index, same, n, type)) %>%
+    rbind(all.fam.pairs.with.metadata.tg %>% mutate(type = "genus") %>% select(annotation.index, same, n, type)) %>%
+    rbind(all.fam.pairs.with.metadata.host %>% mutate(type = "host") %>% select(annotation.index, same, n, type)) %>%
+    left_join(annotation.indices)  %>%
+    right_join(top.diversity.classes) 
+  all.fam.pairs.meta.all$n[is.na(all.fam.pairs.meta.all$n)] = 0
+  all.fam.pairs.meta.all$same[is.na(all.fam.pairs.meta.all$same)] = "unknwon"
+  return(all.fam.pairs.meta.all)
+  }
+
+
+
+recent_mosaic_reprseq_pairs.with.metadata = recent_HGT_pairs_raw.70 %>%
+  # take reprseq lifestyle and taxa
+  left_join(reprseq.metadata.table %>% select(qname = repr.name,  lifestyle.x = lifestyle, genus.x = genus, family.x = family, host.x = host, qnum.genomes.with.this.rHMM = num.genomes.with.this.rHMM)) %>%
+  left_join(reprseq.metadata.table %>% select(sname = repr.name,  lifestyle.y = lifestyle, genus.y = genus, family.y = family, host.y = host, snum.genomes.with.this.rHMM = num.genomes.with.this.rHMM)) %>%
+  # take reprseq rather than family pairs
+  mutate(pair = pair) %>%
+  inner_join(sure.annotations.from.top.diversity %>% select(qname, qindex = annotation.index)) %>%
+  inner_join(sure.annotations.from.top.diversity %>% select(sname = qname, sindex = annotation.index)) %>%
+  filter(qindex == sindex) %>%
+  mutate(annotation.index = qindex)
+
+recent.reprseq.pairs.meta.all = Get.Taxa.And.Lifestyle.Fam.Pairs(recent_mosaic_reprseq_pairs.with.metadata)
+ 
+text.size = 8
+g=ggplot(recent.reprseq.pairs.meta.all %>% filter(n > 0)) +
+  geom_col(aes(x = annotation, y = n, fill = same)) +
+  facet_grid(category ~type, scales = "free", space = "free",
+             labeller = labeller(category = phrog.class.labels)) +
+  coord_flip() +
+  theme_bw() +
+  theme( axis.title.y.right = element_text(size = text.size),
+         axis.text.y.right = element_text(size = text.size),
+          axis.title.y = element_text( size = text.size),
+         axis.text.y = element_text(size = text.size),
+         legend.spacing.y = unit(0.5, 'cm')
+  ) +
+  ylab("Num. pairs rHMMs") +
+  xlab("") +  
+  guides(fill = guide_legend(byrow = TRUE, title = "")) +
+ #scale_y_log10() +
+  #scale_fill_manual()
+  scale_fill_manual(values = c("at least \none rHMM \nin the pair \n is present in\ngenomes of different traits" = "tan",
+                               "at least \none rHMM \nin the pair\nhas unknown trait" = "gray",
+                               "same trait" = "lightblue",
+                               "different trait" = "lightcoral"))
+g
+ggsave(g, filename = sprintf("%srecent_reprseq_pairs_meta.png", OUTPUT.FIGURES.METADATA.PATH), bg = "white", width = 13, height = 6)  
+
+
+
+```
+
+This is quite surprising but we see many tail fibers that are seen across diffent hosts!
+Eg: reprseq125591 is present in Klebsiella phages: NC_028977, NC_047773, NC_047971 AND in Escherichia phage NC_015719:
+
+Klebsiella fiber is even noted by NCBI to be similar to N terminal of  Klebsiella phage K11 gp 17
+"MDQDIKTVIQYPVGATEFDIPFDYLSRKFVRVSLVTGDNRRLLS
+                     NITEYRYVSKTRVKLLVETAGFDRVEIRRFTSASERIVDFSDGSVLRAADLNVSQIQS
+                     AHIAEEARDAALMAMPQDDVGNLDARNRRIVRLAPGIDSTDAINKNQLDTTLGEAGGI
+                     LSQVKDTQKDIQNYIQKFGDDTAMVRGVNWVYNGGSAIGGETSFIIDKSAPVFAVPYI
+                     EVNGSRQFRDWQYEYDPATKRVTLVKPLEAGDFVVCLTTENKLPLEDLLASTGGADSI
+                     GKAGGGTVQDGLDATIHGTDVHRDTVTPGKLDTLLVYNGTNAGRDLRGHEFVMPHGTF
+                     SATRILRTRGISAAESKYTGFTWRGQGSSFTKLVHPATGGQGDIAFMDYLKDVTMSGF
+                     MMDNTALGQGTSNQDTRNGQFWIRHSVDSYFDDLRFAGADALTFCLDHCKNIYSTNLK
+                     VDYQLRYPTGTGKSPLIVGDYSEQCMFIGGYVKTVSPDGTIKYAGDLADNDQADDTKW
+                     AFINLYGLTFEQKPNSNACMWQEGEGAPSNAHFIGMNYINNGVGHGVSEKAVGTDIGS
+                     TFRQAQVRAVWNRAEYISIGSHFINNDAKYPAGTGGAGTAAAGGVHNDNAKFTSLVGD
+                     YFRGNFADYTDYTGASGVNPENSTHITNAKLTSIIRTSSSSTSQHLAIVNCQLTSAGR
+                     ISGGGNGRLHVSVVASHCVGPLGQFGHGQSETYLDVINSTFTAAGSTEAMITQSGVGN
+                     ISFANSTFRDYIRVVDGSHTRVTFRNCTFYTCTFTEDDRKARYVNCRFISCTDAPDSF
+                     GLNFAADSLDRPSSLRVNVTLTAGGSYTFPAWVLQGRGAYFINVGGNGANLPACAGII
+                     GKSSATGSGVWTPQWESTPSSIVVSWPSNGYITVTATTAGNYTIGVH"
+
+
+NC_028977 tail fiber:
+"MDQEIKTVIQYPTGSTEFDIPFDYLSRKFVRVSLVSDDNRRLLS
+                     NITEYRYVSKTRVKLLVATTGFDLVEIRRFTSASERVVDFSDGSVLRANDLNVSQLQS
+                     AHIAEEARDAALLAMPEDDAGDLDARNRKIVRLAPGENGTDAINKDQLDTTLGDAGGI
+                     LSQVKEVQGDIEEYIQKFGDDTAMVRGVNWVYNGGSAVGGETSFIIDKEAPVFAVPYI
+                     EINGSRQFRDWQYEYDSATKRVTLVKPLEAGDFVVCLTTENKLPLEDLLASTGGAASI
+                     GKAGGGTVQDGLDSTIHGTDVHRDTVTPGKLDTLLVYNGTNAGRDLRGHEFVMPHGTF
+                     SATRILRTRGISAAEPKYTKFTWRGQGSSFTKLVHPATGGQGDIAFVDYLKDVTMSGF
+                     MMDNTALGQGTSNQDTRNGQFWIRHSVDSYFDDLRFAGADALTFCLDHCKNIYSTNLK
+                     VDYQLRYPVGTGKSPLIVGDYSEQCMFIGGYVKTVSPDGTIKYAGDLADNDQADDTKW
+                     AFINLYGLTFEQKPNSNACMWQEGEGAPSNAHFIGMNYINNGVGHGVSEKAVGTDIGS
+                     TFRQAQVRAVWNRAEYISIGGHFINNDAKYPAGTGGAGTAAAGGVHNDNAKFTSLVGD
+                     YFRGNFADYTDYTGASGVNPENSTHITNAKLTSTIRTASSSTSQHLAIVNCQLASAGR
+                     IVGGGNGGLHVSVVASHCVGPLGQFGHGQSETYLDVINSTFTAAGSTEAMITQSGVGN
+                     ISFANSTFRDYVRVVDGSQTRVTFRNCTFYTCTFTEDDRKARYVNCRFISCTNAPDAF
+                     GLNFAADSLDRPSSLRVNVTLTAGGSYTFPAWVLQGRGAYFINVGGNGANLPACAGII
+                     GKGSAHSSGAWTPQWESTAGSITVSWPSNGYITVTATTAGNYTIGVH"
+
+
+
+
+# Moaix pairs crossing boarde of taxa / lifestyle
+
+```{r}
+unknown.chars = c("", "unknown")
+reprseq.pairs.with.trait = mosaic.reprseq.pairs.wide  %>%  
+  left_join(recent_HGT_pairs_raw.70 %>% select(reprseq.pair = pair) %>% rowwise() %>% mutate(reprseq.pair = gsub(" AND ", "&", reprseq.pair), 
+                                                                                             data.type = "recent mosaicism\n(pident >= 70%")) %>%
+  left_join(reprseq.metadata.table %>% select(qname = repr.name, lifestyle.x = lifestyle, family.x = family, genus.x = genus, host.x = host)) %>%
+  left_join(reprseq.metadata.table %>% select(sname = repr.name, lifestyle.y = lifestyle, family.y = family, genus.y = genus, host.y = host)) 
+reprseq.pairs.with.trait$data.type[is.na(reprseq.pairs.with.trait$data.type)] = "old mosaicism\n(pident < 70%)"
+
+# mosaic.pairs.lifestyle2 is for pairs within annotation only within the annotations from top diversity
+multi.reprseq.stats.lifestyle = reprseq.pairs.with.trait %>%
+  mutate(trait.x = lifestyle.x, 
+         trait.y = lifestyle.y) %>%
+  #inner_join(domain.mosaic.pairs.lifestyle %>% distinct(family.pair)) %>%
+  #rowwise() %>% 
+  #mutate(lifestylepair = CreatePair(lifestyle.x, lifestyle.y, collapse = " & ")) %>% 
+  mutate(lifestylepair = if_else(trait.x == "multi"  | trait.y == "multi", 
+                                 "at least \none rHMM \nin the pair \n is present in\ngenomes of different traits", 
+                                 if_else(trait.x %in% unknown.chars | trait.y %in% unknown.chars, 
+                                         "at least \none rHMM \nin the pair\nhas unknown trait", 
+                                         if_else(trait.x == trait.y, "same trait", "different trait")))) %>%
+  group_by(lifestylepair, data.type) %>% 
+  summarise(num.pairs = n_distinct(reprseq.pair)) %>%
+  arrange(desc(num.pairs)) %>%
+   mutate(mosaicism = "mosaicism defined by ECOD or seq.",
+          trait = "lifestyle")
+
+multi.reprseq.stats.fam = reprseq.pairs.with.trait %>%
+  mutate(trait.x = family.x, trait.y = family.y) %>%
+  #inner_join(domain.mosaic.pairs.lifestyle %>% distinct(family.pair)) %>%
+  #rowwise() %>% 
+  #mutate(lifestylepair = CreatePair(lifestyle.x, lifestyle.y, collapse = " & ")) %>% 
+  mutate(lifestylepair = if_else(trait.x == "multi"  | trait.y == "multi", 
+                                 "at least \none rHMM \nin the pair \n is present in\ngenomes of different traits", 
+                                 if_else(trait.x %in% unknown.chars | trait.y %in% unknown.chars, 
+                                         "at least \none rHMM \nin the pair\nhas unknown trait", 
+                                         if_else(trait.x == trait.y, "same trait", "different trait")))) %>%
+  group_by(lifestylepair, data.type) %>% 
+  summarise(num.pairs = n_distinct(reprseq.pair)) %>%
+  arrange(desc(num.pairs)) %>%
+   mutate(mosaicism = "mosaicism defined by ECOD or seq.",
+          trait = "family")
+
+
+multi.reprseq.stats.genus = reprseq.pairs.with.trait %>%
+  mutate(trait.x = genus.x, trait.y = genus.y) %>%
+  #inner_join(domain.mosaic.pairs.lifestyle %>% distinct(family.pair)) %>%
+  #rowwise() %>% 
+  #mutate(lifestylepair = CreatePair(lifestyle.x, lifestyle.y, collapse = " & ")) %>% 
+  mutate(lifestylepair = if_else(trait.x == "multi"  | trait.y == "multi", 
+                                 "at least \none rHMM \nin the pair \n is present in\ngenomes of different traits", 
+                                 if_else(trait.x %in% unknown.chars | trait.y %in% unknown.chars, 
+                                         "at least \none rHMM \nin the pair\nhas unknown trait", 
+                                         if_else(trait.x == trait.y, "same trait", "different trait")))) %>%
+  group_by(lifestylepair, data.type) %>% 
+  summarise(num.pairs = n_distinct(reprseq.pair)) %>%
+  arrange(desc(num.pairs)) %>%
+   mutate(mosaicism = "mosaicism defined by ECOD or seq.",
+          trait = "genus")
+
+
+multi.reprseq.stats.host = reprseq.pairs.with.trait %>%
+  mutate(trait.x = host.x, trait.y = host.y) %>%
+  #inner_join(domain.mosaic.pairs.lifestyle %>% distinct(family.pair)) %>%
+  #rowwise() %>% 
+  #mutate(lifestylepair = CreatePair(lifestyle.x, lifestyle.y, collapse = " & ")) %>% 
+  mutate(lifestylepair = if_else(trait.x == "multi"  | trait.y == "multi", 
+                                 "at least \none rHMM \nin the pair \n is present in\ngenomes of different traits", 
+                                 if_else(trait.x %in% unknown.chars | trait.y %in% unknown.chars, 
+                                         "at least \none rHMM \nin the pair\nhas unknown trait", 
+                                         if_else(trait.x == trait.y, "same trait", "different trait")))) %>%
+  group_by(lifestylepair, data.type) %>% 
+  summarise(num.pairs = n_distinct(reprseq.pair)) %>%
+  arrange(desc(num.pairs)) %>%
+   mutate(mosaicism = "mosaicism defined by ECOD or seq.",
+          trait = "host")
+
+g=ggplot(rbind(rbind(rbind(multi.reprseq.stats.lifestyle, multi.reprseq.stats.fam), multi.reprseq.stats.genus), multi.reprseq.stats.host)) +
+  #rbind(multi.fam.stats, multi.fam.stats.recent)) +
+  geom_col(aes(x = lifestylepair, y = num.pairs, fill = lifestylepair)) +
+  #xlab("Lifestyles of mosaic rHMM family pairs") + 
+  ylab("Num of mosaic rHMM pairs") +
+  xlab("") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 45, hjust =1,vjust=1, size = 6),
+        axis.text.y = element_text(hjust = 1,vjust=0.5, size = 6),
+        strip.text.y = element_text(face = "bold", size = 8, angle = 360),
+        strip.text.x = element_text(face = "bold", size = 8, angle = 360)) +
+  scale_fill_manual(values = c("at least \none rHMM \nin the pair \n is present in\ngenomes of different traits" = "tan",
+                               "at least \none rHMM \nin the pair\nhas unknown trait" = "gray",
+                               "same trait" = "lightblue",
+                               "different trait" = "lightcoral"),
+                    name = "Lifestyles of mosaic rHMM pairs") +
+  #facet_grid(mosaicism ~., scales = "free")
+  facet_grid(data.type ~ trait, scales = "free") +
+  guides(fill = "none")
+  g
+  ggsave(g, filename = sprintf("%sdomain_mosaicism_reprseq_pair_lifestyle2.png", OUTPUT.FIGURES.METADATA.PATH), bg = "white", width =13, height =7)  
+  
+   
+  # same for recent mosaicism
+
+```
+
+
+
+# OTHER ANALYSES
+# Describe genomes we have: 
+# taxonomy
+
+```{r}
+
+
+num.genomes.per.tax.fam2 = genomes.per.genus %>%
+  mutate(Family = if_else(big.fam, "other", Family)) %>%
+            group_by(Family) %>% 
+            summarise(n.genomes = sum(num.genomes.per.family)) %>%
+           ungroup() %>%
+           arrange(desc(n.genomes))
+num.genomes.per.tax.fam2$Family = factor(num.genomes.per.tax.fam2$Family, levels = unique(num.genomes.per.tax.fam2$Family))
+g=ggplot(num.genomes.per.tax.fam2) +
+    #geom_jitter(aes(x=lifestyle, y=n.genes.in.genome,  col = lifestyle), size = 0.5) + 
+    #geom_boxplot(aes(x=lifestyle, y=n.genes.in.genome)) + 
+geom_col(aes(x = Family, y = n.genomes), fill = "white", col = "darkblue") +
+  xlab("") +
+  #ylab("Num genes in genome") +
+  theme_bw() +
+    theme(axis.text.x = element_text(angle = 45, hjust =1,vjust=1, size = 8),
+        axis.text.y = element_text(hjust = 1,vjust=0.5, size = 8),
+        strip.text.y = element_text(face = "bold", size = 8, angle = 360),
+        strip.text.x = element_text(face = "bold", size = 8, angle = 360)) 
+ggsave(g, filename = sprintf("%snum_genomes_per_family.png", OUTPUT.FIGURES.METADATA.PATH), bg = "white", width = 12, height = 10)  
+g
+```
+
+
+
+# lifestyle
+```{r}
+# genome size per lifestyle
+g=ggplot(reprseq.metadata.table %>%
+         left_join(name.table) %>%
+         mutate(Accession =sub("\\..*", "", ncbi.id)) %>%
+         distinct(Accession) %>%
+         left_join(metadata) %>%
+         group_by(lifestyle) %>% summarise(nyum.genomes = n_distinct(Accession)) %>%
+         mutate(lifestyle = if_else(is.na(lifestyle), "missing data", lifestyle))) + 
+    geom_col(aes(x=lifestyle, y = nyum.genomes, fill = lifestyle)) + 
+    ylab("Num genomes") +
+    scale_fill_manual(values = c("temperate" = "blue", "virulent" = "red", "multi" = "green", "unknown" = "gray70", "missing data"= "gray50")) + 
+  theme_bw()
+ggsave(g, filename = sprintf("%sgenomes_vs_lifestyles.png", OUTPUT.FIGURES.METADATA.PATH), bg = "white", width = 12, height = 10)  
+g
+
+
+
+```

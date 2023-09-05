@@ -186,16 +186,55 @@ protein.similarity.data.pident.above.30.pc = protein.similarity.data %>%
 data.table::fwrite(protein.similarity.data.pident.above.30.pc, file = sprintf("%sprotein.similarity.data.pident.above.30.pc.txt",OUTPUT.DATA.PATH))
 
 
-
 # cluste sizes: 
 clustering = read.table(CLUSTERING_RESULTS_PATH)
 names(clustering) = c('cluster', 'seq')
-prot.names = read.table(PROTEIN_NAMES_MAPPING_PATH, sep = ",", header = TRUE) 
-names(prot.names) = c("qname", "cluster")
+
 cluster.sizes = clustering %>%
-  left_join(prot.names, by = 'cluster')  %>%
+  left_join(name.table %>% select(cluster = cluster.name, qname = repr.name), by = 'cluster')  %>%
   filter(!(qname %in% unaccepted.genes$qname)) %>%
   group_by(qname) %>%
   summarise(n.prot.in.reprseq = n_distinct(seq)) 
 data.table::fwrite(cluster.sizes, file = sprintf("%snum.prot.in.reprseq.txt", OUTPUT.DATA.PATH))
+
+
+
+############################# process metadata ##########################
+# take NCBI genus and predicted lifestyle
+metadata = read.csv(METADATA_PATH) %>% select(Accession, Molecule, Genus, Family,Order, Class, Phylum, Kingdom,Baltimore.Group, bacphlip_virulent_score, Jumbophage, Genus_ICTV_38, Family_ICTV38, Host) %>%
+  mutate(lifestyle = if_else(bacphlip_virulent_score >= MIN.VIRULENT.BACPHLIP.SCORE, "virulent",
+                             if_else(bacphlip_virulent_score <= MAX.TEMPERATE.BACPHLIP.SCORE, "temperate", "unknown"))) %>%
+  mutate(GeneticMaterial = if_else(grepl("DNA", Molecule), "DNA", if_else(grepl("RNA", Molecule),"RNA", NA)))
+
+
+
+# note: some Genuses are unclassified and some lifestyles are "unknown"
+reprseq.metadata.table = name.table %>%
+  mutate(Accession =sub("\\..*", "", ncbi.id)) %>%
+  mutate(unaccepted.gene = repr.name %in% unaccepted.genes) %>%
+  filter(!unaccepted.gene) %>%
+  left_join(metadata, by = "Accession") %>%
+  group_by(repr.name) %>%
+  summarise(num.genomes.with.this.rHMM = n_distinct(Accession),
+            genus = unique.unclassified.rm(Genus),
+            family = unique.unclassified.rm(Family),
+            rder = unique.unclassified.rm(Order),
+            class = unique.unclassified.rm(Class),
+            kingdom = unique.unclassified.rm(Kingdom),
+            phylum = unique.unclassified.rm(Phylum),
+            baltimore.group = unique.unclassified.rm(Baltimore.Group),
+            lifestyle = unique.unclassified.rm(lifestyle),
+            jumbophage = unique.unclassified.rm(Jumbophage),
+            genus_ICTV38 = unique.unclassified.rm(Genus_ICTV_38),
+            family_ICTV38 = unique.unclassified.rm(Family_ICTV38),
+            host = unique.unclassified.rm(Host),
+            molecule = unique.unclassified.rm(GeneticMaterial)) %>%
+  ungroup()
+
+
+data.table::fwrite(reprseq.metadata.table, file = sprintf("%sreprseq.metadata.table_p09.txt", OUTPUT.DATA.PATH))
+#data.table::fwrite(missing.genomes, file = sprintf("%smissing.genomes.txt", OUTPUT.DATA.PATH))
+data.table::fwrite(metadata, file = sprintf("%smetadata.txt", OUTPUT.DATA.PATH))
+
+
 

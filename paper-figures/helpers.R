@@ -722,8 +722,8 @@ Plot.Domain.Combinations = function(tile.data.object, text.size.axis = 9, text.s
     leg <- ggpubr::get_legend(dummy.plot, position = "right")
     ggleg = ggpubr::as_ggplot(leg)
     #domain.legend.plots[[this.annotation]] =  ggleg
-    
-    
+
+    num.rows =  this.tile.data %>% distinct(qname) %>% nrow()
     gg_rect = Show.Domain.Position.Within.Data(
       tile.data = this.tile.data %>% select(-domain) %>% rename(domain = domain_new),
       colormap = colm, 
@@ -739,9 +739,10 @@ Plot.Domain.Combinations = function(tile.data.object, text.size.axis = 9, text.s
             axis.title.y = element_text(size = text.size.axis),
             #axis.text.x = element_blank(),
             #axis.text.y = element_blank(),
-            axis.text.y = element_text(size = text.size.axis)
-            #axis.ticks.x = element_blank(),
-            #axis.ticks.y = element_blank()
+            axis.text.y = element_text(size = text.size.axis, vjust = 1.1 - (num.rows - 20)/20),
+            axis.ticks.x = element_blank(),
+            axis.ticks.y = element_blank(),
+            panel.border = element_rect(colour = "gray", fill=NA, size=1)
       ) 
     #if (interactive.plot) {gg_rect = girafe(ggobj=gg_rect)}
     domain.position.plots[[this.annotation]] = plot_grid(gg_rect, ggleg,  ncol = 2,rel_widths = c(0.65, 0.35))
@@ -1058,3 +1059,20 @@ Plot.Mosaicism.Table = function(diversity.top, PHROG.COLOR.MAP) {
   p.most.diverse <- p + guides(fill = "none")
   return(p.most.diverse)
 }
+
+
+
+unique.unclassified.rm = function(x, unknown_words = c("unclassified", "unknown", "unspecified", ""), unknown_word_to_use = "unknown") {
+    classified.x.index = which(!(tolower(x) %in% unknown_words))
+    if (length(classified.x.index) == 0) {
+      return(unknown_word_to_use)
+    } else {
+      y = x[classified.x.index]
+      if (length(unique(y)) == 1) {
+        return(unique(y))
+      } else {
+        return("multi")
+      }
+    }
+}
+    

@@ -28,6 +28,7 @@ ecod.domain.descriptions = read.delim(ECOD.DOMAIN.DESCRIPTION.FILEPATH,
 
 color.map.df = PHROG.COLOR.MAP %>% stack()
 names(color.map.df) = c("color", "category")
+dir.create(sprintf("%sFigure_Supplementary/Supplementary_Tables", OUTPUT.FIGURES.PATH))
 ```
 
 ```{r}
@@ -126,6 +127,19 @@ surely.annotated.ecod.domains.high.confidence = ecod.domains.hits %>%
 
 # here we only look at included categories and only the specific ones
 # surely.annotated.ecod.domains.high.confidence has only domains from qnames in included but may be not specific
+
+av.num.h.per.qname = surely.annotated.ecod.domains.high.confidence %>% 
+  anti_join(unspecific.annotation.indices, by = "annotation.index") %>%
+  distinct(qname, family, h_id, annotation.index) %>%
+  inner_join(included.category.sizes %>% 
+               select(annotation.index, num.proteins)) %>%
+  group_by(annotation.index, qname) %>%
+  summarise(num.h = n_distinct(h_id)) %>%
+  group_by(annotation.index) %>%
+  summarise(median.nun.h = median(num.h),
+            max.num.h = max(num.h))
+
+
 h.domain.occurence.data = surely.annotated.ecod.domains.high.confidence %>% 
   anti_join(unspecific.annotation.indices, by = "annotation.index") %>%
   distinct(qname, family, h_id, annotation.index) %>%
@@ -182,6 +196,7 @@ t.domain.occurence.data.full = t.domain.occurence.data %>%
 dir.create(sprintf("%sFigure_Supplementary/T_domains", OUTPUT.FIGURES.PATH))
 data.table::fwrite(t.domain.occurence.data.full, sprintf("%sFigure_Supplementary/T_domains/T_domains.txt", OUTPUT.FIGURES.PATH))
 data.table::fwrite(t.domain.occurence.data, sprintf("%sFigure2/t.domain.occurence.data.txt", OUTPUT.FIGURES.PATH))
+
 
 
 # here we also include annotations from included categories only
@@ -395,6 +410,7 @@ diversity.data0 = included.category.sizes %>%
   select(annotation.index, num.families, num.proteins, num.topologies = num.t, num.topology.combinations = num.t.combinations, prop.proteins.with.ecod.hit, mean.no.of.folds.per.fold.type, poorly.ecod.annotated)  %>%
   left_join(annotation.indices)  %>%
   left_join(prot.lengths) %>%
+  left_join(av.num.h.per.qname) %>%
   #left_join(mosaicism.per.fold.type) %>%
   left_join(num.folds.per.fold.type.data) %>%
   #left_join(seq.mosaicism.from.various.classes) %>%
@@ -633,6 +649,7 @@ all.proteins.with.mosaic.signal.pident90 = unique(c(seq.mosaic.pairs.all.pident 
 
 ```
 
+
 ```{r}
 all.proteins.with.seq.mosaic.signal = unique(c(seq.mosaic.pairs.all.pident %>% filter(mosaic) %>% pull(qname),
                                                 seq.mosaic.pairs.all.pident %>% filter(mosaic) %>% pull(sname)))
@@ -644,22 +661,136 @@ all.proteins = reprseq.function.status %>%
   mutate(mosaic = qname %in% all.proteins.with.any.mosaic.signal,
          mosaic.domain = qname %in% all.proteins.with.domain.mosaic.signal
          )
+data.table::fwrite(all.proteins, sprintf("%sall.proteins.txt", OUTPUT.DATA.PATH))
+data.table::fwrite(seq.mosaic.pairs.all.pident, sprintf("%sseq.mosaic.pairs.all.pident.txt", OUTPUT.DATA.PATH))
+data.table::fwrite(qname.pairs.sharing.t.and.disshare.x, sprintf("%sqname.pairs.sharing.t.and.disshare.x.txt", OUTPUT.DATA.PATH))
+
+
+```
+
+# ceck how heterogeneous families are
+```{r}
+# !! many Families contain proteins of multiple annotations and also proteins that are mosiac and proteins that are non-mosaic
+# each family needs to be either mosaic or not to do the test !! 
+# if we use n_distinct(family[mosaic]) and n_distinct(family[non.mosaic]) we will count some families twice
+
+unique.na.rm = function(x) {
+  y = x[!is.na(x)] 
+  return(unique(y))
+  }
+all.families.tmp = all.proteins %>% 
+  left_join(surely.annotated.proteins.from.included.categories)  %>%
+  inner_join(included.category.sizes) %>%
+  group_by(family) %>%
+  summarise(mosaic.homogeneous = length(unique(mosaic)) == 1,
+            domain.mosaic.homogeneous = length(unique(mosaic.domain)) == 1,
+            mosaic = any(mosaic),
+            mosaic.domain = any(mosaic.domain),
+            annotation.homogeneous = length(unique.na.rm(annotation.index))==1)
+
+
+# families cannot be uniquely assigned to the groups: mosaic, non-mosaic, this.annotation, other annotation
+# se we cannot perfrom ch-square test on them
+# We can perform chi-square test on # proteins though 
+
+
+# How do we trrat a case when family contains mosaic tail fibers and non-mosaic spikes?
+# at the moment we count is as non-mosaic for spikes and as mosaic for fibers.
+
+
+all.families.tmp2 = all.proteins %>% 
+    left_join(surely.annotated.proteins.from.included.categories)  %>%
+  inner_join(included.category.sizes) %>%
+  group_by(family, annotation.index) %>%
+  summarise(mosaic = any(mosaic),
+            mosaic.domain = any(mosaic.domain))
+
+# are there any cases like that? yes! eg fam00004 is mosaic for tail completion connector and non-mosaic for minor capsid
+all.families.tmp2 %>% 
+  group_by(family) %>%
+  summarise(m = length(unique(mosaic)) == 1,
+            m2 = length(unique(mosaic.domain)) ==1) %>%
+  filter(!m | !m2)
+
+
+```
+
+```{r}
+
+
+
+all.families = all.proteins %>% 
+  group_by(family) %>%
+  summarise(mosaic = any(mosaic),
+            mosaic.domain = any(mosaic.domain))
+
+
+
+  
+  
+# only families that have some specific annotations foom included categories
+all.families.with.any.included.annotation = all.proteins %>%
+  inner_join(surely.annotated.proteins.from.included.categories) %>%
+  anti_join(unspecific.annotation.indices) %>%
+  distinct(family) %>%
+  inner_join(all.families)
 
 
 prop.mosaic.and.multidomain.data = all.proteins %>%
   left_join(surely.annotated.proteins.from.included.categories) %>%
   left_join(included.category.sizes) %>%
-  distinct(qname, annotation.index,mosaic.domain, num.proteins) %>%
+  distinct(qname, annotation.index,mosaic.domain,mosaic, num.proteins) %>%
   group_by(annotation.index, num.proteins) %>%
-  summarise(num.with.domain.mosaic.signal = sum(mosaic.domain)) %>%
+  summarise(num.with.domain.mosaic.signal = sum(mosaic.domain),
+            num.with.any.mosaic.signal = sum(mosaic)) %>%
   ungroup() %>%
-  mutate(prop.with.domain.mosaic.signal = num.with.domain.mosaic.signal/num.proteins)
+  mutate(prop.with.domain.mosaic.signal = num.with.domain.mosaic.signal/num.proteins,
+         prop.with.any.mosaic.signal = num.with.any.mosaic.signal/num.proteins)
   
+prop.mosaic.families = all.proteins %>%
+  left_join(surely.annotated.proteins.from.included.categories) %>%
+  left_join(included.category.sizes) %>%
+  distinct(qname, annotation.index,num.families) %>%
+  left_join(families) %>%
+  left_join(all.families) %>%
+  distinct(family, annotation.index, num.families, mosaic, mosaic.domain) %>%
+  group_by(annotation.index, num.families) %>%
+  summarise(num.with.domain.mosaic.signal = sum(mosaic.domain),
+            num.with.any.mosaic.signal = sum(mosaic)) %>%
+  ungroup() %>%
+  mutate(prop.with.domain.mosaic.signal = num.with.domain.mosaic.signal/num.families,
+         prop.with.any.mosaic.signal = num.with.any.mosaic.signal/num.families)
 
 
-mosaic.domain.classes = all.proteins %>%
+num.prots.from.specific.indices.per.domain = all.proteins %>%
   left_join(surely.annotated.proteins.from.included.categories) %>%
   inner_join(included.category.sizes) %>%
+  anti_join(unspecific.annotation.indices) %>%
+  group_by(mosaic.domain) %>%
+  summarise(num.proteins = n()) 
+
+num.prots.from.specific.indices.per.seq.or.domain = all.proteins %>%
+  left_join(surely.annotated.proteins.from.included.categories) %>%
+  inner_join(included.category.sizes) %>%
+  anti_join(unspecific.annotation.indices) %>%
+  group_by(mosaic) %>%
+  summarise(num.proteins = n()) 
+
+
+num.families.per.domain.mosaicism = all.families.with.any.included.annotation %>%
+  group_by(mosaic.domain) %>%
+  summarise(num.families= n()) 
+
+num.families.per.seq.or.domain.mosaicism = all.families.with.any.included.annotation %>%
+  group_by(mosaic) %>%
+  summarise(num.families= n()) 
+
+
+
+mosaic.domain.classes.old = all.proteins %>%
+  left_join(surely.annotated.proteins.from.included.categories) %>%
+  inner_join(included.category.sizes) %>%
+  anti_join(unspecific.annotation.indices) %>%
   group_by(annotation.index, num.proteins, num.families) %>%
   summarise(num.prot.mosaic.domain = sum(mosaic.domain),
             num.families.mosaic.domain = n_distinct(family[mosaic.domain]),
@@ -669,27 +800,124 @@ mosaic.domain.classes = all.proteins %>%
   ungroup() %>%
   mutate(num.families.nonmosaic.domain = num.families - num.families.mosaic.domain,
          num.families.nonmosaic.seq.or.domain = num.families - num.families.mosaic.seq.or.domain) %>%
+  mutate(
+         num.prot.nonmosaic.domain = num.proteins - num.prot.mosaic.domain,
+         num.prot.nonmosaic.seq.or.domain = num.proteins - num.prot.mosaic.seq.or.domain,
+         num.prot.mosaic.domain.other.functions = num.prots.from.specific.indices.per.domain %>% filter(mosaic.domain) %>% pull(num.proteins) - num.prot.mosaic.domain,
+         num.prot.nonmosaic.domain.other.functions = num.prots.from.specific.indices.per.domain %>% filter(!mosaic.domain) %>% pull(num.proteins) - num.prot.nonmosaic.domain) %>%
   mutate(odds.seq.to.ecod = NA,#odds.seq.to.ecod = (num.families.mosaic.seq.or.domain/num.families.nonmosaic.seq.or.domain)/(num.families.mosaic.domain/num.families.nonmosaic.domain),
-         pval = NA) %>%
+         pval = NA,
+         odds = NA) %>%
   left_join(annotation.indices)
 
 
+
+# This way we traet the whole family mosaic if there are some mosaic proteins in this family, even if they are from a different annotation
+mosaic.domain.classes = all.proteins %>%
+  distinct(qname, family, mosaic, mosaic.domain) %>%
+  left_join(surely.annotated.proteins.from.included.categories) %>%
+  inner_join(included.category.sizes) %>%
+  anti_join(unspecific.annotation.indices) %>%
+  left_join(all.families.with.any.included.annotation %>% select(family, family.mosaic = mosaic, family.mosaic.domain = mosaic.domain), by = "family") %>%
+  group_by(annotation.index, num.proteins, num.families) %>%
+  summarise(num.families.mosaic.domain = n_distinct(family[family.mosaic.domain]),
+            num.families.mosaic.seq.or.domain = n_distinct(family[family.mosaic]),
+            num.prot.mosaic.domain = sum(mosaic.domain),
+            num.prot.mosaic.seq.or.domain = sum(mosaic)
+            ) %>%
+  ungroup() %>%
+  mutate(num.families.nonmosaic.domain = num.families - num.families.mosaic.domain,
+         num.families.nonmosaic.seq.or.domain = num.families - num.families.mosaic.seq.or.domain,
+         num.families.mosaic.domain.other.functions = num.families.per.domain.mosaicism %>% filter(mosaic.domain) %>% pull(num.families) - num.families.mosaic.domain,
+         num.families.nonmosaic.domain.other.functions = num.families.per.domain.mosaicism %>% filter(!mosaic.domain) %>% pull(num.families) - num.families.nonmosaic.domain,
+         num.families.mosaic.seq.or.domain.other.functions = num.families.per.seq.or.domain.mosaicism %>% filter(mosaic) %>% pull(num.families) - num.families.mosaic.seq.or.domain,
+         num.families.nonmosaic.seq.or.domain.other.functions = num.families.per.seq.or.domain.mosaicism %>% filter(!mosaic) %>% pull(num.families) - num.families.nonmosaic.seq.or.domain) %>%
+  mutate(
+         num.prot.nonmosaic.domain = num.proteins - num.prot.mosaic.domain,
+         num.prot.nonmosaic.seq.or.domain = num.proteins - num.prot.mosaic.seq.or.domain,
+         num.prot.mosaic.domain.other.functions = num.prots.from.specific.indices.per.domain %>% filter(mosaic.domain) %>% pull(num.proteins) - num.prot.mosaic.domain,
+         num.prot.nonmosaic.domain.other.functions = num.prots.from.specific.indices.per.domain %>% filter(!mosaic.domain) %>% pull(num.proteins) - num.prot.nonmosaic.domain,
+         num.prot.mosaic.seq.or.domain.other.functions = num.prots.from.specific.indices.per.seq.or.domain %>% filter(mosaic) %>% pull(num.proteins) - num.prot.mosaic.seq.or.domain,
+         num.prot.nonmosaic.seq.or.domain.other.functions = num.prots.from.specific.indices.per.seq.or.domain %>% filter(!mosaic) %>% pull(num.proteins) - num.prot.nonmosaic.seq.or.domain
+         ) %>%
+  mutate(odds.seq.to.ecod = NA,#odds.seq.to.ecod = (num.families.mosaic.seq.or.domain/num.families.nonmosaic.seq.or.domain)/(num.families.mosaic.domain/num.families.nonmosaic.domain),
+         pval.domain = NA,
+         pval.seq.or.domain = NA) %>%
+  left_join(annotation.indices)
+
+
+
+ 
+ # test if some classes are overrepresented within mosaic families
   for (this.annotation.index in unique(mosaic.domain.classes$annotation.index)) {
     this.annot.stats = mosaic.domain.classes %>% filter(annotation.index == this.annotation.index)
     M1 = matrix(0, nrow=2, ncol = 2)
-    M1[1,1] <- this.annot.stats$num.families.mosaic.seq.or.domain
-    M1[1,2] = this.annot.stats$num.families.nonmosaic.seq.or.domain
-    M1[2,1] = this.annot.stats$num.families.mosaic.domain 
-    M1[2,2] = this.annot.stats$num.families.nonmosaic.domain
+    M1[1,1] <- this.annot.stats$num.families.mosaic.domain
+    M1[1,2] = this.annot.stats$num.families.nonmosaic.domain
+    M1[2,1] = this.annot.stats$num.families.mosaic.domain.other.functions 
+    M1[2,2] = this.annot.stats$num.families.nonmosaic.domain.other.functions
     fisher_test_res = fisher.test(M1, alternative = "greater")
-    mosaic.domain.classes$pval[which(mosaic.domain.classes$annotation.index == this.annotation.index)] = fisher_test_res$p.value
-    mosaic.domain.classes$odds.seq.to.ecod[which(mosaic.domain.classes$annotation.index == this.annotation.index)] =fisher_test_res$estimate
+    mosaic.domain.classes$pval.domain[which(mosaic.domain.classes$annotation.index == this.annotation.index)] = fisher_test_res$p.value
+    mosaic.domain.classes$odds.ratio.domain[which(mosaic.domain.classes$annotation.index == this.annotation.index)] = fisher_test_res$estimate %>% as.numeric()
+    #mosaic.domain.classes$odds[which(mosaic.domain.classes$annotation.index == this.annotation.index)] =fisher_test_res$estimate
+    M2 = matrix(0, nrow=2, ncol = 2)
+    M2[1,1] <- this.annot.stats$num.families.mosaic.seq.or.domain
+    M2[1,2] = this.annot.stats$num.families.nonmosaic.seq.or.domain
+    M2[2,1] = this.annot.stats$num.families.mosaic.seq.or.domain.other.functions 
+    M2[2,2] = this.annot.stats$num.families.nonmosaic.seq.or.domain.other.functions
+    fisher_test_res2 = fisher.test(M2, alternative = "greater")
+    mosaic.domain.classes$pval.seq.or.domain[which(mosaic.domain.classes$annotation.index == this.annotation.index)] = fisher_test_res2$p.value
+    mosaic.domain.classes$odds.ratio.seq.or.domain[which(mosaic.domain.classes$annotation.index == this.annotation.index)] = fisher_test_res2$estimate %>% as.numeric()
     
   }
- mosaic.domain.classes$pval.corr = mosaic.domain.classes$pval*length(unique(mosaic.domain.classes$annotation.index))
+
+
+
+ mosaic.domain.classes$pval.domain.corr = mosaic.domain.classes$pval.domain*length(unique(mosaic.domain.classes$annotation.index))
+ mosaic.domain.classes$pval.seq.or.domain.corr = mosaic.domain.classes$pval.seq.or.domain*length(unique(mosaic.domain.classes$annotation.index))
 
 data.table::fwrite(mosaic.domain.classes, sprintf("%sFigure4/mosaic.domain.classes.txt", OUTPUT.FIGURES.PATH))
+#data.table::fwrite(mosaic.domain.classes.old, sprintf("%sFigure4/mosaic.domain.classes.old.txt", OUTPUT.FIGURES.PATH))
 
+```
+
+```{r, eval = FALSE}
+ #  test if some classes are overrepresented within mosaic families( done on proteins)
+ # for (this.annotation.index in unique(mosaic.domain.classes$annotation.index)) {
+#    this.annot.stats = mosaic.domain.classes %>% filter(annotation.index == this.annotation.index)
+ #   M1 = matrix(0, nrow=2, ncol = 2)
+#    M1[1,1] <- this.annot.stats$num.prot.mosaic.domain
+#    M1[1,2] = this.annot.stats$num.prot.nonmosaic.domain
+#    M1[2,1] = this.annot.stats$num.prot.mosaic.domain.other.functions 
+#    M1[2,2] = this.annot.stats$num.prot.nonmosaic.domain.other.functions
+#    fisher_test_res = fisher.test(M1, alternative = "greater")
+    #mosaic.domain.classes$pval.domain[which(mosaic.domain.classes$annotation.index == this.annotation.index)] = fisher_test_res$p.value
+    #mosaic.domain.classes$odds[which(mosaic.domain.classes$annotation.index == this.annotation.index)] =fisher_test_res$estimate
+#    M2 = matrix(0, nrow=2, ncol = 2)
+#    M2[1,1] <- this.annot.stats$num.prot.mosaic.seq.or.domain
+#    M2[1,2] = this.annot.stats$num.prot.nonmosaic.seq.or.domain
+#    M2[2,1] = this.annot.stats$num.prot.mosaic.seq.or.domain.other.functions 
+#    M2[2,2] = this.annot.stats$num.prot.nonmosaic.seq.or.domain.other.functions
+#    fisher_test_res2 = fisher.test(M2, alternative = "greater")
+    #mosaic.domain.classes$pval.seq.or.domain[which(mosaic.domain.classes$annotation.index == this.annotation.index)] = fisher_test_res2$p.value
+    
+#  }
+
+
+
+# test if mosaic.seq.or.domain is overrepresented in some classes
+#  for (this.annotation.index in unique(mosaic.domain.classes$annotation.index)) {
+#    this.annot.stats = mosaic.domain.classes %>% filter(annotation.index == this.annotation.index)
+#    M1 = matrix(0, nrow=2, ncol = 2)
+#    M1[1,1] <- this.annot.stats$num.families.mosaic.seq.or.domain
+#    M1[1,2] = this.annot.stats$num.families.nonmosaic.seq.or.domain
+#    M1[2,1] = this.annot.stats$num.families.mosaic.domain 
+#    M1[2,2] = this.annot.stats$num.families.nonmosaic.domain
+#    fisher_test_res = fisher.test(M1, alternative = "greater")
+    #mosaic.domain.classes$pval[which(mosaic.domain.classes$annotation.index == this.annotation.index)] = fisher_test_res$p.value
+    #mosaic.domain.classes$odds.seq.to.ecod[which(mosaic.domain.classes$annotation.index == this.annotation.index)] =fisher_test_res$estimate
+    
+#  }
 
  
 ```
@@ -915,6 +1143,8 @@ bb = data.frame(
 
 print(bb)
 ```
+
+
 
 ```{r, eval = TRUE}
 hhr.table = read.csv("/Users/bognasmug/MGG Dropbox/Projects/divRBP/phage-pp-workdir-refseq-hhblits/output/prot-families/all-by-all/hhblits/table-hhr.txt", 

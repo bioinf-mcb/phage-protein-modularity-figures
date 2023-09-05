@@ -28,6 +28,11 @@ names(PHROG.COLOR.MAP2)[idx] =  "DNA, RNA\nand nucleotide metabolism"
 idx = which(names(PHROG.COLOR.MAP2) == "moron, auxiliary metabolic gene and host takeover")
 names(PHROG.COLOR.MAP2)[idx] =  "moron, auxiliary metabolic\ngene and host takeover"
 MIN.NUM.FAMILIES.CATEGORY.COVERAGE.PLOT = 5
+text_size.x = 9
+text_size.y = 9
+phrog.class.labels2 = phrog.class.labels
+phrog.class.labels2[which(names(phrog.class.labels2) == "head and packaging")] = "head\nand\npack."
+phrog.class.labels2[which(names(phrog.class.labels2) == "DNA, RNA and nucleotide metabolism")] = "DNA,\nRNA\nand\nnucleot.\nmetab."
 ```
 
 # Main category legend 
@@ -49,8 +54,8 @@ dev.off()
 
 # Annotation trade-off
 ```{r, eval = TRUE}
-col1.uniqueness <- "darkgreen"
-col2.coverage <- "darkred"
+col1.uniqueness <- "darkblue"
+col2.coverage <- "sandybrown"
 point.size = 3
 line.size = 1
 text.size = 12
@@ -244,39 +249,53 @@ dev.off()
 # Heatmap of ECODS found in multiple categories
 ```{r}
 
-text_size.x = 9
-text_size.y = 9
+
 
 h.domain.occurence.data = data.table::fread(sprintf("%sFigure1/H_domains.txt", OUTPUT.FIGURES.PATH)) %>% 
   as.data.frame() 
 h.domain.occurence.data$category <- factor(h.domain.occurence.data$category, levels = phrogs.class.order)
-h.domain.occurence.data = h.domain.occurence.data %>%
-  tidyr::unite(col = "h_name2", h_name, h_id, sep = "\n")
-phrog.class.labels2 = phrog.class.labels
-phrog.class.labels2[which(names(phrog.class.labels2) == "head and packaging")] = "head\nand\npack."
-phrog.class.labels2[which(names(phrog.class.labels2) == "DNA, RNA and nucleotide metabolism")] = "DNA,\nRNA\nand\nnucleot.\nmetab."
-ggplot(h.domain.occurence.data) +
-  geom_tile(aes(x=h_name2, y = annotation, fill = num.prot.with.this.h.domain)) + #, hjust = 0, vjust = 0
+#h.domain.occurence.data = h.domain.occurence.data %>%
+#  tidyr::unite(col = "h_name2", h_name, h_id, sep = "\n")
+
+g0=ggplot(h.domain.occurence.data) +
+  geom_tile(aes(x=h_name, y = annotation, fill = num.prot.with.this.h.domain)) + #, hjust = 0, vjust = 0
+  theme_bw() +
   theme(axis.text.x = element_text(angle=45, hjust =1,vjust=1, size = text_size.x),
         axis.text.y = element_text(hjust = 1,vjust=0.5, size = text_size.y),
-        strip.text.y = element_text(face = "bold", size = 6, angle = 360),
-        strip.text.x = element_text(face = "bold", size = 6, angle = 360)) +
+        strip.text.y = element_text(face = "bold", size = 8, angle = 360),
+        strip.text.x = element_text(face = "bold", size = 8, angle = 360)) +
   facet_grid(category ~all.categories, scales = "free", space = "free", 
              labeller = labeller(category = phrog.class.labels,
                                  all.categories = c(phrog.class.labels2, "multiple categories" = "multiple\ncategories"))) + 
   xlab("") + ylab("") +
-  scale_fill_gradient(name = "number\nof rHHMs", low = "#9999D1", high = "#000046", trans = "log10")
-  #scale_fill_gradient(name = "number\nof rHHMs", low = "#CCCCE8", high = "#000046", trans = "log10") 
-  #scale_fill_gradient2(name = "number\nof rHHMs", low = "#CCCCE8",mid="#00008B", high = "#000046", trans = "log10", midpoint = 2)
-  
-  #scale_fill_gradient(name = "Num. rHHMs", low = "lightcyan", high = "darkblue", trans = "log10") #+
-  #scale_fill_gradient2(name = "number\nof rHHMs", low = "#9999D1", mid = "#00008B", high = "#000046", trans = "log10")
-  #guides(fill = "none") #+
-  #scale_fill_manual(values = PHROG.COLOR.MAP)
+  #scale_fill_gradient(name = "number\nof rHHMs", low = "#9999D1", high = "#000046", trans = "log10")
+  scale_fill_gradient(name = "number\nof rHHMs", low = "seashell2", high = "seashell4", trans = "log10")
 
-#ggsave(sprintf("%sFigure2/H_domains.jpg", OUTPUT.FIGURES.PATH), width = 7, height = 10)
-ggsave(sprintf("%sFigure1/Figure1_H_domains.pdf", OUTPUT.FIGURES.PATH), width = 11, height = 10)
-ggsave(sprintf("%sFigure1/Figure1_H_domains.tiff", OUTPUT.FIGURES.PATH), width = 11, height = 10)
+  #scale_alpha_continuous(name = "number\nof rHHMs", trans = "log10") +
+  #  scale_fill_manual(values = PHROG.COLOR.MAP) +
+  #guides(fill = "none")
+
+g0
+
+# now change the strip colors
+g <- ggplot_gtable(ggplot_build(g0))
+stripr <- which(grepl('strip-r', g$layout$name))
+fills <-PHROG.COLOR.MAP[phrogs.class.order] %>% as.character()
+k <- 1
+for (i in stripr) {
+  j <- which(grepl('rect', g$grobs[[i]]$grobs[[1]]$childrenOrder))
+  g$grobs[[i]]$grobs[[1]]$children[[j]]$gp$fill <- fills[k]
+  k <- k+1
+}
+
+
+pdf(file = sprintf("%sFigure1/Figure1_H_domains.pdf", OUTPUT.FIGURES.PATH), width = 11, height = 12)
+grid::grid.draw(g)
+dev.off()
+
+tiff(sprintf("%sFigure1/Figure1_H_domains.tiff", OUTPUT.FIGURES.PATH), width = 11, height = 12)
+grid::grid.draw(g)
+dev.off()
 ```
 
 ```{r}
@@ -305,11 +324,12 @@ num.f.fig = ggplot(num.f.within.h.bars) +
 
 
 ct=cor.test(num.f.within.h$num_f, num.f.within.h$num_prot, method = "spearman")
-cor.fig = ggplot(num.f.within.h) +
-  geom_point(aes(x = num_prot, y = num_f)) +
+cor.fig = ggplot(num.f.within.h, aes(x = num_prot, y = num_f)) +
+  geom_point() +
   scale_x_log10() +
   scale_y_log10() +
-  geom_text(aes(x = 2, y = 100, label = paste0("Rho = ", as.numeric(round(ct$estimate,2)), ",\np.val = ",  as.numeric(round(ct$p.value,5))))) +
+    stat_cor(method = "spearman", alternative = "two.sided", label.x = 0.2, label.y = 2, label.sep = "\n", cor.coef.name = "rho") +
+  #geom_text(aes(x = 2, y = 100, label = paste0("Rho = ", as.numeric(round(ct$estimate,2)), ",\np.val = ",  as.numeric(round(ct$p.value,5))))) +
   theme_bw() + 
   theme(axis.text.x = element_text(size = text_size.x),
         axis.text.y = element_text(size = text_size.y)
@@ -348,15 +368,15 @@ ggsave(sprintf("%sFigure_Supplementary/T_domains/T_domains.jpg", OUTPUT.FIGURES.
 
 # Shiny plots for most mosaic classes
 ```{r, fig.width = 10}
-
+all.tiles.data = data.table::fread(sprintf("%sFigure3/domain.positions.txt", OUTPUT.FIGURES.PATH))
 most.mosaic.classes = c("DNA polymerase", "tail fiber","tail spike", "endolysin")
 i=0
 domain.position.plots = list()
 for (mosaic.class in most.mosaic.classes) {
   i=i+1
-  tile.data = data.table::fread(sprintf("%sFigure3/domain.positions.txt", OUTPUT.FIGURES.PATH)) %>%
+  tile.data = all.tiles.data %>%
     filter(domain.level == "T" & annotation %in% mosaic.class)
-  domain.position.plots[[i]] =Plot.Domain.Combinations(tile.data, text.size.axis = 9, text.size.panel = 12)$domain.position.plots[[1]]
+  domain.position.plots[[i]] =Plot.Domain.Combinations(tile.data, text.size.axis = 8, text.size.panel = 12)$domain.position.plots[[1]]
 }
 pdf(sprintf("%sFigure3/domain.positions_most_mosaic.pdf", OUTPUT.FIGURES.PATH), 
            width = 17,
@@ -376,8 +396,9 @@ diversity.ok.ecod = diversity %>%
   mutate(label = if_else(diverse.for.label,annotation , ""))
 
 
-Fig4b = ggplot(diversity.ok.ecod) + 
-  geom_point(aes(x = num.families, y = num.topology.combinations, colour = category)) + 
+Fig4b = ggplot(diversity.ok.ecod, aes(x = num.families, y = num.topology.combinations)) + 
+  geom_point(aes(colour = category)) + 
+  stat_cor(method = "spearman", alternative = "two.sided", label.x = 0.2, label.y = 35, label.sep = "\n", cor.coef.name = "rho") +
   #geom_vline(aes(xintercept = threshold.num.fam), col = "red", linetype = "dashed") +
   #geom_hline(aes(yintercept = threshold.num.topology.combinations), col = "red", linetype = "dashed") +
   scale_x_log10() + 
@@ -394,6 +415,7 @@ ggsave(sprintf("%sFigure_Supplementary/diversity_scatterplot/diversity_scatterpl
 
 ```{r}
   levels = c("mean.length",
+             "max.num.h",
             "mean.num.t", 
              "prop.proteins.with.ecod.hit",
              "prop.with.multi.x.domains")
@@ -416,6 +438,7 @@ Get.Labeller = function(diversity.top, levels) {
   #diversity.labeller[diversity.levels == "proteome covered by ECOD hits"] <- "proteome covered by ECOD hits"
   diversity.labeller[diversity.levels == "prop.proteins.with.ecod.hit"] <-  "Prop. of prot. with >= 1 X group"
   diversity.labeller[diversity.levels == "mean.length"] = "Mean protein length (num AA)"
+  diversity.labeller[diversity.levels == "max.num.h"] = "Max number of H domains"
   names(diversity.labeller) <- diversity.levels
   return(diversity.labeller)
 }
@@ -428,7 +451,8 @@ diversity.top = diversity %>%
     select(mean.num.t, annotation, category, 
            prop.with.multi.x.domains,
            prop.proteins.with.ecod.hit,
-           mean.length) %>%
+           mean.length,
+           max.num.h) %>%
   tidyr::gather(key = "proportion", value = "value", -c("annotation", "category")) %>%
   filter(proportion %in% levels)
 diversity.top$proportion = factor(diversity.top$proportion, levels = levels)
@@ -450,24 +474,27 @@ ggsave(sprintf("%sFigure_Supplementary/ecod-coverage/ecod-coverage.png", OUTPUT.
 
 # Mosaicism by sequence vs ecod
 ```{r}
+# mosaic family in a given annotatioh i.e. at least one protein in this family having this annotation is mosaic
 mosaicism.underestimated.data  = data.table::fread(sprintf("%sFigure4/mosaic.domain.classes.txt", OUTPUT.FIGURES.PATH)) %>%
-   select(annotation.index, annotation, category, num.families, num.families.mosaic.domain, num.families.mosaic.seq.or.domain, pval.corr, odds.seq.to.ecod) 
+   select(annotation.index, annotation, category, num.families, num.families.mosaic.domain, num.families.mosaic.seq.or.domain, pval.seq.or.domain.corr, pval.domain.corr)  %>%
+  inner_join(included.category.sizes %>% select(annotation.index)) %>%
+  inner_join(top.diversity.classes)
 
 mosaicism.underestimated.data = mosaicism.underestimated.data %>%
   select(annotation.index, annotation, category, 
          num.families,
          num.families.mosaic.domain,
          num.families.mosaic.seq.or.domain,
-         pval.corr,
-         odds.seq.to.ecod) %>%
-  inner_join(included.category.sizes %>% select(annotation.index)) %>%
-  inner_join(top.diversity.classes) %>%
+         pval.seq.or.domain.corr,
+         pval.domain.corr,
+         num.families.mosaic.domain) %>%
   filter(!(annotation.index %in% unspecific.annotation.indices)) %>%
   rename(`All` = num.families,
          `Mosaic by ECOD` =  num.families.mosaic.domain,#num.prot.mosaic.domain.within.and.to.other.specific.class, 
          `Mosaic by ECOD or seq` =   num.families.mosaic.seq.or.domain) %>%
-  tidyr::gather(key = "type", value = "num.families", `All`, `Mosaic by ECOD`, `Mosaic by ECOD or seq`) %>% 
-  mutate(significant = if_else(pval.corr < 0.05 & type == 'All', "*", "")) 
+  tidyr::gather(key = "type", value = "num.families", `All`, `Mosaic by ECOD`, `Mosaic by ECOD or seq`)  %>%
+  mutate(label_domain = if_else(pval.domain.corr <= 0.05 & type == "Mosaic by ECOD", "*", ""),
+         label_seq_or_domain = if_else(pval.seq.or.domain.corr <= 0.05 & type == "Mosaic by ECOD or seq","*", ""))
 mosaicism.underestimated.data$type = factor(mosaicism.underestimated.data$type,
                                             levels = c(
                                               'All',
@@ -475,12 +502,11 @@ mosaicism.underestimated.data$type = factor(mosaicism.underestimated.data$type,
                                               'Mosaic by ECOD'))
 
 
-top.odds.annots = mosaicism.underestimated.data %>% 
-  arrange(desc(odds.seq.to.ecod)) %>%
-  head(15)
 
 g=ggplot(mosaicism.underestimated.data, aes(y = annotation, x = num.families, fill = category, col = category)) +
   geom_bar(aes(alpha = type), stat = "identity", position  = "identity") +
+  geom_text(aes(label = label_domain), nudge_x = 2, size = 5, color = "black", fontface='bold') +
+  geom_text(aes(label = label_seq_or_domain), nudge_x = 2, size = 5, color = "gray30", fontface='bold') +
   #geom_text(aes(label = significant), nudge_x = 10) +
   scale_alpha_manual(values = c(All = 0.05,
                                 `Mosaic by ECOD` = 1,
@@ -495,9 +521,9 @@ g=ggplot(mosaicism.underestimated.data, aes(y = annotation, x = num.families, fi
   guides(color = "none", fill = "none")
   
 g
-ggsave(sprintf("%sFigure4/Ecod_vs_signal_mosaicism_families.pdf", OUTPUT.FIGURES.PATH), g,
+ggsave(sprintf("%sFigure4/Ecod_vs_signal_mosaicism_families.new.pdf", OUTPUT.FIGURES.PATH), g,
        width = 13, height = 7)
-ggsave(sprintf("%sFigure4/Ecod_vs_signal_mosaicism_families.png", OUTPUT.FIGURES.PATH), g, bg = "white",
+ggsave(sprintf("%sFigure4/Ecod_vs_signal_mosaicism_families.new.png", OUTPUT.FIGURES.PATH), g, bg = "white",
        width = 13, height = 7)
 
 ```
@@ -520,14 +546,14 @@ domain_fill_colors = t.domain.occurence.data %>%
   as.data.frame()
 
 all.t.in.fold.types = data.table::fread(file = sprintf("%sFigure2/all.t.in.fold.types.txt", OUTPUT.FIGURES.PATH))
-p.odds = Plot.Domains.Within.Mosaic.Proteins(all.t.in.fold.types, colors = domain_fill_colors) 
+p.odds = Plot.Domains.Within.Mosaic.Proteins(all.t.in.fold.types, colors = domain_fill_colors) + theme(text = element_text(size = 20))
 #ggsave(filename = sprintf("%sAdditional_Figures/folds_within_mosaic_fold_types.jpg", OUTPUT.FIGURES.PATH) ,p.odds , width = 15, height = 12)
-ggsave(filename = sprintf("%sFigure2/folds_within_mosaic_fold_types.pdf", OUTPUT.FIGURES.PATH) ,p.odds , width = 15, height = 12)
+ggsave(filename = sprintf("%sFigure2/folds_within_mosaic_fold_types.pdf", OUTPUT.FIGURES.PATH) ,p.odds , width = 10, height = 9)
 
 all.t.in.fold.types_pident50 = data.table::fread(file = sprintf("%sFigure2/all.t.in.fold.types_pident50.txt", OUTPUT.FIGURES.PATH))
-p.odds = Plot.Domains.Within.Mosaic.Proteins(all.t.in.fold.types_pident50, colors = domain_fill_colors) 
+p.odds = Plot.Domains.Within.Mosaic.Proteins(all.t.in.fold.types_pident50, colors = domain_fill_colors) + theme(text = element_text(size = 20))
 #ggsave(filename = sprintf("%sAdditional_Figures/folds_within_mosaic_fold_types_pident50.jpg", OUTPUT.FIGURES.PATH) ,p.odds , width = 15, height = 12)
-ggsave(filename = sprintf("%sFigure2/folds_within_mosaic_fold_types_pident50.pdf", OUTPUT.FIGURES.PATH) ,p.odds , width = 15, height = 12)
+ggsave(filename = sprintf("%sFigure2/folds_within_mosaic_fold_types_pident50.pdf", OUTPUT.FIGURES.PATH) ,p.odds , width = 10, height = 9)
 ```
 
 
@@ -606,7 +632,7 @@ cov.vs.pident.figure <- plot_grid(cov.vs.pident.plot, not.domain.mosaic.pair.cov
                                   label_size = 25, ncol = 1)
 
 ggsave(sprintf("%sFigure_Supplementary/pident-maxcov/pident-maxcov.png", OUTPUT.FIGURES.PATH), cov.vs.pident.figure, bg = "white",  width = 5, height = 12)
-  
+
 ```
 
 ```{r}
@@ -657,6 +683,31 @@ VisualiseIgraphnetwork(data.for.network = recent_HGT_pairs_90 %>% mutate(weight 
 dev.off()
 ```
 
+# Supplementary Table
+```{r}
+
+mosaic.domain.classes = data.table::fread(sprintf("%sFigure4/mosaic.domain.classes.txt", OUTPUT.FIGURES.PATH))
+write.xlsx(x = mosaic.domain.classes %>% left_join(annotation.indices) %>% select(annotation.index, annotation, category, 
+                                                                                      odds.ratio.domain, pval.domain, pval.domain.corr,
+                                                                                      odds.ratio.seq.or.domain, pval.seq.or.domain, pval.seq.or.domain.corr), 
+           file= sprintf("%sFigure_Supplementary/Supplementary_Tables/Statistical_Tests.xls", OUTPUT.FIGURES.PATH), 
+           sheetName = "Overrepresentation_of_functional_classes_in_mosaic_rHMMs", 
+           col.names = TRUE, row.names = FALSE, append = FALSE)
+
+all.t.in.fold.types.pident50 = data.table::fread(file = sprintf("%sFigure2/all.t.in.fold.types_pident50.txt", OUTPUT.FIGURES.PATH))
+all.t.in.fold.types = data.table::fread(file = sprintf("%sFigure2/all.t.in.fold.types.txt", OUTPUT.FIGURES.PATH))
+stat.dat = all.t.in.fold.types  %>% select(t_id, t_name, h.index, h_name, odds.ratio, pval) %>%
+  full_join(all.t.in.fold.types.pident50 %>% select(t_id, t_name, h.index, h_name, pident50.odds.ratio = odds.ratio, pident50.pval = pval))
+
+write.xlsx(x = stat.dat, 
+           file= sprintf("%sFigure_Supplementary/Supplementary_Tables/Statistical_Tests.xls", OUTPUT.FIGURES.PATH), 
+           sheetName = "Overrepresentation_of_ECOD_domains_in_mosaic_rHMMs", 
+           col.names = TRUE, row.names = FALSE, append = TRUE)
+
+```
+
+
+
 # recently transferred domains (recent HGT & domains)
 ```{r, eval = FALSE}
 text_size.x = 6
@@ -690,6 +741,30 @@ p=ggplot(recent_HGT_pairs_raw.domain.data.to.plot.all.pident90) + geom_col(aes(x
   xlab("") +
   ylab("Num. protein pairs")
 ggsave(sprintf("%sFigure_Supplementary/recent_HGT_domains_pident90.pdf", OUTPUT.FIGURES.PATH), p, width = 15, height = 7)
+```
+
+```{r, eval = FALSE}
+ tmp <- installed.packages()
+ installedpkgs <- as.vector(tmp[is.na(tmp[,"Priority"]), 1])
+ #save(installedpkgs, file=sprintf("%sFigure_Supplementary/Supplementary_Tables/R_packages.rda", OUTPUT.FIGURES.PATH))
+  installedpkg2s <- as.vector(tmp)
+ #save(installedpkg2s, file=sprintf("%sFigure_Supplementary/Supplementary_Tables/R_packages2da", OUTPUT.FIGURES.PATH))
+   installedpkg2s <- as.vector(tmp)
+   save(tmp, file=sprintf("%sFigure_Supplementary/Supplementary_Tables/R_installedpkgs_all.rda", OUTPUT.FIGURES.PATH))
+``` 
+
+```{r, eval = FALSE}
+library(devtools)  
+ load(file=sprintf("%sFigure_Supplementary/Supplementary_Tables/R_installedpkgs_all.rda", OUTPUT.FIGURES.PATH))
+ installedpackages = tmp
+ tmp[which(names(tmp[,1]) == "plotly"),]
+ tmp[which(names(tmp[,1]) == "ggplot2"),]
+ 
+ 
+pcknames = as.vector(installedpackages[is.na(installedpackages[,"Priority"]), 1])
+pckversions = as.vector(installedpackages[is.na(installedpackages[,"Priority"]), 3])
+for (count in 1:length(installedpackages)) {
+    install_version(pcknames[count], version = pckversions[count])
 ```
 
 
