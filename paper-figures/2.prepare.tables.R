@@ -1,7 +1,7 @@
 # check if cds are ok
 aaletters = str_split("ABCDEFGHIKLMNPQRSTUVWYZ", "") %>% unlist()
 aalettersstr = sprintf("[%s]", paste0(c(aaletters, tolower(aaletters)), sep = "", collapse = ""))
-all.cds = seqinr::read.fasta("/Users/bognasmug/MGG Dropbox/Projects/divRBP/phage-pp-workdir-refseq-hhblits/input/coding-seqs/cds-aa.fa", as.string= TRUE)
+all.cds = seqinr::read.fasta(ALL.CDS.PATH, as.string= TRUE)
 name.table = read.table(NAME_TABLE_PATH, sep = ",", header = TRUE)
 
 num.unaccepted.chars.in.sequences = lapply(all.cds, CheckAAcode) 

@@ -1,5 +1,6 @@
 # Also install data.table, tidyr
 library(R.utils)
+library(seqinr)
 # adding it at the bottom may brak igraph plotting
 library(ggiraph)  
 library(stringr)
@@ -64,49 +65,52 @@ MAIN.COVS.FOR.ANNOTATION = sort(MAIN.COVS.FOR.ANNOTATION)
 ######################################################  create all necessary paths ###################################################### 
 #source(sprintf("%scode/protein-mosaicism/paper-figures/helpers.R", PROJECT.PATH))
 source(sprintf("%scode/protein-mosaicism/paper-figures/helpers.R", PROJECT.PATH))
-DATA.PATH = sprintf("%s/phage-pp-workdir-refseq-hhblits/output/", PROJECT.PATH)
-
+DATA.PATH = sprintf("%sminimal-input-data/", PROJECT.PATH)
+ALL.CDS.PATH = sprintf("%sinput/coding-seqs/cds-aa.fa", DATA.PATH)
 # families
-#FAMILIES.RAW.FILEPATH = sprintf("%sprot-families/families/dataset-full/mcl/repr-hits-pairwise-prob95-cov80-mcl.out", DATA.PATH)
-FAMILIES.FILEPATH = sprintf("%srafals-figures/data/families/family-table.txt",PROJECT.PATH)
-#PROFILE.SIMILARITY.TABLE = sprintf("%sprot-families/families/dataset-full/repr-hits-pairwise-prob50.csv", DATA.PATH)
-PROFILE.SIMILARITY.TABLE = sprintf("%srafals-figures/data/families/table_qcov-scov_all.txt", PROJECT.PATH)
+#FAMILIES.RAW.FILEPATH = sprintf("%sprot-families/families/dataset-full/mcl/repr-hits-pairwise-prob95-cov80-mcl.out", DATA.PATH) : Krzysiek pipeline
+#FAMILIES.FILEPATH = sprintf("%srafals-figures/data/families/family-table.txt",PROJECT.PATH): Rafal's version
+# This is currently Rafal's version, will be updated by Krzysiek within pipeline
+FAMILIES.FILEPATH = sprintf("%sinput/other/family-table.txt",DATA.PATH)
 
+
+#PROFILE.SIMILARITY.TABLE = sprintf("%sprot-families/families/dataset-full/repr-hits-pairwise-prob50.csv", DATA.PATH): Krzysiek pipeline
+#PROFILE.SIMILARITY.TABLE = sprintf("%srafals-figures/data/families/table_qcov-scov_all.txt", PROJECT.PATH) Rafal's version
+# This is currently Rafal's version, will be updated by Krzysiek within pipeline
+PROFILE.SIMILARITY.TABLE = sprintf("%sinput/other/table_qcov-scov_all.txt",DATA.PATH)
+  
 # all vs all / recent HGT pairs
-#HHALIGN_RECENT_MOSAICISM_PATH = sprintf("%sprot-families/all-by-all/hhblits/table-hhr-hgt-hhalign.txt", DATA.PATH)
-
 # data from mmseq clustes from which the representative sequences were selected and the lengths of representative sequences
-CLUSTERING_RESULTS_PATH = sprintf("%sprot-families/representative/clustering.tsv", DATA.PATH)
+CLUSTERING_RESULTS_PATH = sprintf("%soutput/prot-families/representative/clustering.tsv", DATA.PATH)
 #PROTEIN_NAMES_MAPPING_PATH = sprintf("%sprot-families/representative/name-table.txt", DATA.PATH)
-NAME_TABLE_PATH = sprintf("%sprot-families/representative/name-table-full.txt", DATA.PATH)
-REPR.SEQ.LENGTH.FILENAME = sprintf("%sprot-families/representative/repr-seqs-lengths.txt", DATA.PATH)
+NAME_TABLE_PATH = sprintf("%soutput/prot-families/representative/name-table-full.txt", DATA.PATH)
+REPR.SEQ.LENGTH.FILENAME = sprintf("%soutput/prot-families/representative/repr-seqs-lengths.txt", DATA.PATH)
 # data from HMM-HMM comparison results and annotation metadata
-PHROG.HHPRED.HITS.PATH = sprintf("%sprot-families/functional/hhblits-phrogs.txt", DATA.PATH)
-ECOD.DOMAIN.HITS.PATH = sprintf("%sprot-families/functional/hhblits-ecod.txt", DATA.PATH)
-#PFAM.DOMAIN.HITS.PATH = sprintf("%sprot-families/functional/hhblits-pfam35.txt", DATA.PATH)
-
-# downloaded from: http://prodata.swmed.edu/ecod/complete/distribution:
-ECOD.DOMAIN.DESCRIPTION.FILEPATH = sprintf("%sDatabases/ECOD/ECOD/ecod.develop283.domains.txt", DROPBOX.PATH)
-PHROG.TABLE.PATH = sprintf("%sDatabases/Phrogs/phrog_annot_v4.tsv", DROPBOX.PATH)
-MANUAL.PHROG.CLASS.MAPPING = sprintf("%sDatabases/Phrogs/custom/v3_phrogs-table-rafal-3_12.xlsx", DROPBOX.PATH) 
-# where to output tables and figures
-OUTPUT.DATA.PATH = sprintf("%spaper-figures/2023-09-04/tables/", PROJECT.PATH)
-OUTPUT.FIGURES.PATH = sprintf("%spaper-figures/2023-09-04/", PROJECT.PATH)
-dir.create(OUTPUT.FIGURES.PATH, recursive = TRUE)
-dir.create(OUTPUT.DATA.PATH, recursive = TRUE)
+PHROG.HHPRED.HITS.PATH = sprintf("%soutput/prot-families/functional/hhblits-phrogs.txt", DATA.PATH)
+ECOD.DOMAIN.HITS.PATH = sprintf("%soutput/prot-families/functional/hhblits-ecod.txt", DATA.PATH)
 
 UNSPECIFIC.ANNOTATIONS = c("tail", "structural protein", "uknown")
 UNKNOWN.ANNOTATION.INDEX = 10000
 GENERAL.ANTIDEFENSE.ANNOTATION.INDEX = 0
-ANTI_DEFENSE_DATA_TABLE_PATH = "/Users/bognasmug/MGG Dropbox/Projects/ECFs/data/phage-ECF-workdir-refseq-hhblits-102022/ecf-explorer/output/anti-defence/table-hhr-ad-rseq.txt"
-ANTI_DEFENSE_DESCRIPTION_PATH = "/Users/bognasmug/MGG Dropbox/Databases/Antidefense_Samuel&Burstein/custom/media-4-simplified_2023_04.xlsx"
-
+ANTI_DEFENSE_DATA_TABLE_PATH = sprintf("%sinput/other/table-hhr-ad-rseq.txt", DATA.PATH)
+ANTI_DEFENSE_DESCRIPTION_PATH = sprintf("%sinput/other/media-4-simplified_2023_04.xlsx", DATA.PATH)
+# downloaded from: http://prodata.swmed.edu/ecod/complete/distribution:
+ECOD.DOMAIN.DESCRIPTION.FILEPATH = sprintf("%sinput/other/ecod.develop283.domains.txt", DATA.PATH)
+PHROG.TABLE.PATH = sprintf("%sinput/other/phrog_annot_v4.tsv", DATA.PATH)
+MANUAL.PHROG.CLASS.MAPPING = sprintf("%sinput/other/v3_phrogs-table-rafal-3_12.xlsx", DATA.PATH) 
 
 # metadata
-MIN.VIRULENT.BACPHLIP.SCORE = 0.9#0.75
-MAX.TEMPERATE.BACPHLIP.SCORE = 0.1#0.25
-#METADATA_PATH = "/Users/bognasmug/MGG Dropbox/Projects/divRBP/phage-pp-workdir-refseq-hhblits/input/metadata/refseq_metadata_new.csv"
-METADATA_PATH = "/Users/bognasmug/MGG Dropbox/Projects/divRBP/phage-pp-workdir-refseq-hhblits/input/metadata/refseq_metadata_updated_v3.csv"
+MIN.VIRULENT.BACPHLIP.SCORE = 0.9
+MAX.TEMPERATE.BACPHLIP.SCORE = 0.1
+METADATA_PATH = sprintf("%sinput/metadata/refseq_metadata_updated_v3.csv", DATA.PATH)
+
+# where to output tables and figures
+OUTPUT.DATA.PATH = sprintf("%spaper-figures/2023-09-10/tables/", PROJECT.PATH)
+OUTPUT.FIGURES.PATH = sprintf("%spaper-figures/2023-09-10/", PROJECT.PATH)
+dir.create(OUTPUT.FIGURES.PATH, recursive = TRUE)
+dir.create(OUTPUT.DATA.PATH, recursive = TRUE)
+
+
 ######################################################## visual parameters ################################################################
 # theme for shiny-like plots
 theme.no.verical = theme(
