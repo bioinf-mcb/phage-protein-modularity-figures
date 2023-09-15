@@ -66,7 +66,7 @@ ui <- shinyUI(fluidPage(
             #conditionalPanel(condition = "isvalidCategory",
             #                 uiOutput("annotation_selection")),
             conditionalPanel(condition="$('html').hasClass('shiny-busy')",
-                             tags$div("Calculating...",id="loadmessage")),
+                             tags$div("Please wait, the server is loading data...",id="loadmessage")),
           width = 3
         ),
         

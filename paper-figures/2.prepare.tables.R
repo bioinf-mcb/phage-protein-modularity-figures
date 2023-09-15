@@ -205,7 +205,10 @@ metadata = read.csv(METADATA_PATH) %>% select(Accession, Molecule, Genus, Family
   mutate(lifestyle = if_else(bacphlip_virulent_score >= MIN.VIRULENT.BACPHLIP.SCORE, "virulent",
                              if_else(bacphlip_virulent_score <= MAX.TEMPERATE.BACPHLIP.SCORE, "temperate", "unknown"))) %>%
   mutate(GeneticMaterial = if_else(grepl("DNA", Molecule), "DNA", if_else(grepl("RNA", Molecule),"RNA", NA)))
-
+# manually found RNA phages missing from inphrared
+# from missing phages: 11 RNA phages: NC_012091, NC_042071 NC_042072 NC_042069 NC_055057 NC_042068 NC_012092 NC_042073. NC_004301 NC_055058 NC_001417 (found manually)
+# about 15 obsolete DNA genomes
+# metadata$GeneticMaterial[metadata$Accession %in% c('NC_012091', 'NC_042071', 'NC_042072', 'NC_042069', 'NC_055057', 'NC_042068', 'NC_012092', 'NC_042073', 'NC_004301', 'NC_055058', 'NC_001417')] = "RNA"
 
 
 # note: some Genuses are unclassified and some lifestyles are "unknown"

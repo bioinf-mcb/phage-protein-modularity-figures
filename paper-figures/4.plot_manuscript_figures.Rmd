@@ -12,6 +12,7 @@ library(RColorBrewer)
 library(gridExtra)
 library(ggh4x)
 ecod_id_to_names_map = data.table::fread(sprintf("%secod_id_to_names_map.txt",OUTPUT.DATA.PATH)) %>% as.data.frame()
+annotation.indices = data.table::fread(file = sprintf("%sannotation.indices",OUTPUT.DATA.PATH))
 included.category.sizes = data.table::fread(file = sprintf("%sincluded.category.sizes",OUTPUT.DATA.PATH))
 unspecific.annotation.indices = data.table::fread(file = sprintf("%sunspecific.annotation.indices",OUTPUT.DATA.PATH))
 included.categories.metadata = data.table::fread( 
@@ -545,13 +546,15 @@ domain_fill_colors = t.domain.occurence.data %>%
   mutate(color = if_else(is.na(color), "#FFFFFF", color)) %>%
   as.data.frame()
 
+significance_level_alpha = 0.05
+
 all.t.in.fold.types = data.table::fread(file = sprintf("%sFigure2/all.t.in.fold.types.txt", OUTPUT.FIGURES.PATH))
-p.odds = Plot.Domains.Within.Mosaic.Proteins(all.t.in.fold.types, colors = domain_fill_colors) + theme(text = element_text(size = 20))
+p.odds = Plot.Domains.Within.Mosaic.Proteins(all.t.in.fold.types, colors = domain_fill_colors, significance_level_alpha = significance_level_alpha) + theme(text = element_text(size = 20))
 #ggsave(filename = sprintf("%sAdditional_Figures/folds_within_mosaic_fold_types.jpg", OUTPUT.FIGURES.PATH) ,p.odds , width = 15, height = 12)
 ggsave(filename = sprintf("%sFigure2/folds_within_mosaic_fold_types.pdf", OUTPUT.FIGURES.PATH) ,p.odds , width = 10, height = 9)
 
 all.t.in.fold.types_pident50 = data.table::fread(file = sprintf("%sFigure2/all.t.in.fold.types_pident50.txt", OUTPUT.FIGURES.PATH))
-p.odds = Plot.Domains.Within.Mosaic.Proteins(all.t.in.fold.types_pident50, colors = domain_fill_colors) + theme(text = element_text(size = 20))
+p.odds = Plot.Domains.Within.Mosaic.Proteins(all.t.in.fold.types_pident50, colors = domain_fill_colors, significance_level_alpha = significance_level_alpha) + theme(text = element_text(size = 20))
 #ggsave(filename = sprintf("%sAdditional_Figures/folds_within_mosaic_fold_types_pident50.jpg", OUTPUT.FIGURES.PATH) ,p.odds , width = 15, height = 12)
 ggsave(filename = sprintf("%sFigure2/folds_within_mosaic_fold_types_pident50.pdf", OUTPUT.FIGURES.PATH) ,p.odds , width = 10, height = 9)
 ```
@@ -696,8 +699,8 @@ write.xlsx(x = mosaic.domain.classes %>% left_join(annotation.indices) %>% selec
 
 all.t.in.fold.types.pident50 = data.table::fread(file = sprintf("%sFigure2/all.t.in.fold.types_pident50.txt", OUTPUT.FIGURES.PATH))
 all.t.in.fold.types = data.table::fread(file = sprintf("%sFigure2/all.t.in.fold.types.txt", OUTPUT.FIGURES.PATH))
-stat.dat = all.t.in.fold.types  %>% select(t_id, t_name, h.index, h_name, odds.ratio, pval) %>%
-  full_join(all.t.in.fold.types.pident50 %>% select(t_id, t_name, h.index, h_name, pident50.odds.ratio = odds.ratio, pident50.pval = pval))
+stat.dat = all.t.in.fold.types  %>% select(t_id, t_name, h.index, h_name, odds.ratio, pval, corrected.pval) %>%
+  full_join(all.t.in.fold.types.pident50 %>% select(t_id, t_name, h.index, h_name, pident50.odds.ratio = odds.ratio, pident50.pval = pval, pident50.corrected.pval = corrected.pval))
 
 write.xlsx(x = stat.dat, 
            file= sprintf("%sFigure_Supplementary/Supplementary_Tables/Statistical_Tests.xls", OUTPUT.FIGURES.PATH), 

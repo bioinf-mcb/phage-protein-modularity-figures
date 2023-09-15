@@ -861,7 +861,7 @@ Get.Recent.HGT.Domains = function(recent_HGT_pairs_raw, hhr.table, surely.annota
 
 
 
-Plot.Domains.Within.Mosaic.Proteins = function(domains.within.proteins.domain.mosaic, colors = NULL) {
+Plot.Domains.Within.Mosaic.Proteins = function(domains.within.proteins.domain.mosaic, colors = NULL, significance_level_alpha = 0.05) {
   
   if (is.null(colors)) {
     colors = domains.within.proteins.domain.mosaic %>% distinct(t_id) %>% mutate(color = "gray")
@@ -869,7 +869,7 @@ Plot.Domains.Within.Mosaic.Proteins = function(domains.within.proteins.domain.mo
   
   domains.within.proteins.with.significant.higher.domain.mosaic = domains.within.proteins.domain.mosaic %>%
     left_join(colors, by = "t_id") %>%
-    filter(corrected.pval < 0.05) %>%
+    filter(corrected.pval < significance_level_alpha) %>%
     select(t_id, t_name, h_name, mosaic,odds.ratio, corrected.pval, fillcolor = color) %>%
     arrange(desc(odds.ratio))
   #write.xlsx(x = domains.within.proteins.with.significant.higher.domain.mosaic, 
@@ -947,7 +947,7 @@ Get_Domain_Odss_In_Fold_Types = function(all.fold.types, ecod_id_to_names_map) {
   all.t.in.fold.types = all.t.in.fold.types %>% 
     left_join(ecod_id_to_names_map %>% filter(level == "H") %>% select(h.index = id, h_name = name)) %>%
     left_join(ecod_id_to_names_map %>% filter(level == "T") %>% select(t_id = id, t_name = name)) %>%
-    mutate(corrected.pval = pval/nrow(all.t.in.fold.types)) %>%
+    mutate(corrected.pval = pval*nrow(all.t.in.fold.types)) %>%
     mutate(mosaic = "Mosaic") %>%
     #filter(pval < 0.05/nrow(all.t.in.fold.types)) %>%
     arrange(desc(odds.ratio))
