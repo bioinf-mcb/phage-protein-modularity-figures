@@ -202,7 +202,8 @@ g=ggplot(all.proteins.in.genomes.dat %>% filter(lifestyle %in% c("temperate", "v
   geom_jitter(aes(col = lifestyle), size = 0.5, alpha = 0.3, height = 0)+
   #geom_histogram(aes(x=prop.mosaic.genes.in.genome, fill = lifestyle), alpha = 0.5) + facet_grid(lifestyle ~.)
   geom_boxplot(alpha = 0.3) + 
-  theme_bw() +
+  theme_bw() + 
+  ylab("Prop. of mosaic proteins per genome") +
   stat_compare_means(method.args = list(alternative  = "greater"))
 g
 ggsave(g, filename = sprintf("%sprop_mosaic_genes_per_genome_and_lifestyle.png", OUTPUT.FIGURES.METADATA.PATH), bg = "white", width = 6, height = 4)  
@@ -285,6 +286,7 @@ g=ggplot(all.proteins.in.genomes.dat.by.Family %>% filter(big.fam),
         strip.text.y = element_text(face = "bold", size = 8, angle = 360),
         strip.text.x = element_text(face = "bold", size = 8, angle = 360)) +
   guides(col ="none") +
+  ylab("Prop. of mosaic proteins per genome") +
   xlab("")
 g
 ggsave(g, filename = sprintf("%sprop_mosaic_genes_per_genome_and_TaxFam.png", OUTPUT.FIGURES.METADATA.PATH), bg = "white", width = 8, height = 6)  
@@ -325,6 +327,7 @@ all.proteins.in.genomes.dat.by.host$Host = factor(all.proteins.in.genomes.dat.by
 g=ggplot(all.proteins.in.genomes.dat.by.host %>% filter(big),
          aes(x=Host, y = prop.mosaic.genes.in.genome)) + 
   geom_jitter(aes(col = Host), size = 0.5, alpha = 0.3, height = 0) +
+  ylab("Prop. of mosaic proteins per genome") +
   stat_compare_means() +
   #geom_histogram(aes(x=prop.mosaic.genes.in.genome, fill = lifestyle), alpha = 0.5) + facet_grid(lifestyle ~.)
   geom_boxplot(alpha = 0.3) + 

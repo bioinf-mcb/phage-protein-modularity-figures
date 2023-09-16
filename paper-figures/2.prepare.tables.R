@@ -19,21 +19,21 @@ data.table::fwrite(unaccepted.genes, file = sprintf("%sunaccepted.genes.txt",OUT
 
 ######################################### ANNOTATIONS ########################################################
 # families
-#families.raw = readLines(FAMILIES.RAW.FILEPATH) %>%
-#  stringi::stri_split_lines() %>%
-#  lapply(FUN = function(x) {unlist(strsplit(x, split = "\t"))})
-#names(families.raw) = paste0("fam", 1:length(families.raw))
-#families = families.raw %>% stack()
-#names(families) = c("qname", "family")
-#repr.seq.lengths = data.table::fread(file = sprintf("%sprot-families/representative/repr-seqs-lengths.txt", DATA.PATH))
-#qnames.with.no.family = setdiff(repr.seq.lengths$name, families$qname)
-#families.singletons = data.frame(qname = qnames.with.no.family) %>% mutate(family = paste0("fam", 1+length(families.raw):length(families.raw)+length(qnames.with.no.family)))
-#families = rbind(families, families.singletons) %>%
-#  filter(!(qname %in% unaccepted.genes$qname))
-
-families = data.table::fread(FAMILIES.FILEPATH, header = TRUE) %>%
-  select(family, qname = members) %>%
+families.raw = readLines(FAMILIES.RAW.FILEPATH) %>%
+  stringi::stri_split_lines() %>%
+  lapply(FUN = function(x) {unlist(strsplit(x, split = "\t"))})
+names(families.raw) = paste0("fam", 1:length(families.raw))
+families = families.raw %>% stack()
+names(families) = c("qname", "family")
+repr.seq.lengths = data.table::fread(file = REPR.SEQ.LENGTH.PATH)
+qnames.with.no.family = setdiff(repr.seq.lengths$name, families$qname)
+families.singletons = data.frame(qname = qnames.with.no.family) %>% mutate(family = paste0("fam", 1+length(families.raw):length(families.raw)+length(qnames.with.no.family)))
+families = rbind(families, families.singletons) %>%
   filter(!(qname %in% unaccepted.genes$qname))
+
+#families2 = data.table::fread(FAMILIES.FILEPATH, header = TRUE) %>%
+#  select(family, qname = members) %>%
+#  filter(!(qname %in% unaccepted.genes$qname))
 data.table::fwrite(families, file = sprintf("%sfamilies.txt", OUTPUT.DATA.PATH))
 
 
@@ -146,8 +146,9 @@ rm(ecod.domain.hits.raw)
 
 ###################################### PAIRWISE HITS AND SEQUENCE MOSAICISM ##################################
 seq.lengths = data.table::fread(REPR.SEQ.LENGTH.FILENAME)
-protein.similarity.data.raw = read.csv(PROFILE.SIMILARITY.TABLE,header = TRUE)  %>%
-  rename(qname = query, sname = subject)
+protein.similarity.data.raw = read.csv(PROFILE.SIMILARITY.TABLE,header = TRUE) %>%
+  #rename(qname = query, sname = subject)
+  rename(scov.min = scov_min, qcov.min = qcov_min, scov.max = scov_max, qcov.max = qcov_max, max.cov = max_cov, min.cov = min_cov) 
 protein.similarity.data = protein.similarity.data.raw %>%
   select(qname, sname, prob, pident, scov.min, qcov.min, scov.max, qcov.max, max.cov, min.cov) %>%
   left_join(seq.lengths %>% select(qname = name, qlength = length)) %>%
@@ -187,14 +188,10 @@ data.table::fwrite(protein.similarity.data.pident.above.30.pc, file = sprintf("%
 
 
 # cluste sizes: 
-clustering = read.table(CLUSTERING_RESULTS_PATH)
-names(clustering) = c('cluster', 'seq')
-
-cluster.sizes = clustering %>%
-  left_join(name.table %>% select(cluster = cluster.name, qname = repr.name), by = 'cluster')  %>%
+cluster.sizes = name.table %>% select(cluster = cluster.name, qname = repr.name, ncbi.id) %>%
   filter(!(qname %in% unaccepted.genes$qname)) %>%
   group_by(qname) %>%
-  summarise(n.prot.in.reprseq = n_distinct(seq)) 
+  summarise(n.prot.in.reprseq = n_distinct(ncbi.id)) 
 data.table::fwrite(cluster.sizes, file = sprintf("%snum.prot.in.reprseq.txt", OUTPUT.DATA.PATH))
 
 
