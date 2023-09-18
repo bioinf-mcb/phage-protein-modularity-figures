@@ -878,7 +878,9 @@ data.table::fwrite(mosaic.domain.classes, sprintf("%sFigure4/mosaic.domain.class
 ```{r, eval = TRUE}
 
 #most.mosaic.annotations = diversity.data %>% filter(data.type == "top.diversity") %>% arrange(desc(prob.mosaicism)) %>% head(12) %>% pull(annotation.index)
-most.mosaic.annotations = diversity.data  %>% filter(annotation %in% c("tail fiber","tail spike", "endolysin", "DNA polymerase")) %>% pull(annotation.index)
+most.mosaic.annotations = diversity.data  %>% 
+  filter(annotation %in% c("tail fiber","tail spike", "endolysin", "DNA polymerase")) %>% 
+  pull(annotation.index)
 # too many domains if we include "tails"
 tile.data.list = list()
 i=0
@@ -898,20 +900,32 @@ this.domain.level.id = paste0(tolower(this.domain.level), "_id")
     
     if (nrow(domains.within.this.annotation) > 0) {
       i=i+1
-      tile.data = Get.Domain.Positions.Data(
-        domains.within.this.annotation %>%
-          # take only one representative per each domain combination and family combination
+      # here we want to know how many reprseqs in a given family have a given domain combination
+      num.prot.per.repr.arch = domains.within.this.annotation %>%
+            distinct(qname, family, all.domains) %>%
+            left_join(num.prot.in.reprseq, by = "qname") %>%
             group_by(all.domains, family) %>%
-            mutate(first.domain = first.domain[1],
-                    repr.qname = qname[1]) %>%
+            # sum over all qnames from this family and domain architecture we will only look at number of sequences with this architecture AND with this annotation
+            summarise(n.prot.in.arch = sum(n.prot.in.reprseq)) %>%
+        ungroup()
+ 
+     filtered.data.for.tiles = domains.within.this.annotation %>%
+          # take only one representative per each domain combination and family combination
+          # do not distinguish between A,B and B,A if within one family
+            group_by(all.domains, family) %>%
+            mutate(repr.qname = qname[1]) %>%
             ungroup() %>%
             filter(repr.qname == qname) %>%
+       left_join(num.prot.per.repr.arch, by = c("all.domains", "family")) %>%
             arrange(first.domain, family)%>%
-            mutate(annotation = annotation.index)) %>%
+            mutate(annotation = annotation.index)
+     
+        
+      tile.data = Get.Domain.Positions.Data(filtered.data.for.tiles) %>%
         mutate(annotation.index = this.annotation.index,
                 domain.level = this.domain.level) %>%
         left_join(families, by = "qname")  %>%
-        left_join(num.prot.in.reprseq, by = "qname")
+        left_join(filtered.data.for.tiles %>% distinct(qname, n.prot.in.arch) %>% rename(n.prot.in.reprseq = n.prot.in.arch))
       tile.data.list[[i]] = tile.data
           
     }

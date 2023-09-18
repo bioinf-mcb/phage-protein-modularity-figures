@@ -107,8 +107,8 @@ MAX.TEMPERATE.BACPHLIP.SCORE = 0.1
 METADATA_PATH = sprintf("%smetadata/refseq_metadata_updated_v3.csv", DATA.PATH)
 
 # where to output tables and figures
-OUTPUT.DATA.PATH = sprintf("%spaper-figures/2023-09-15-new/tables/", PROJECT.PATH)
-OUTPUT.FIGURES.PATH = sprintf("%spaper-figures/2023-09-15-new/", PROJECT.PATH)
+OUTPUT.DATA.PATH = sprintf("%spaper-figures/2023-09-16/tables/", PROJECT.PATH)
+OUTPUT.FIGURES.PATH = sprintf("%spaper-figures/2023-09-16/", PROJECT.PATH)
 dir.create(OUTPUT.FIGURES.PATH, recursive = TRUE)
 dir.create(OUTPUT.DATA.PATH, recursive = TRUE)
 

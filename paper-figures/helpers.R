@@ -638,7 +638,7 @@ Plot.Domain.Combinations = function(tile.data.object, text.size.axis = 9, text.s
       arrange(row) %>%
       group_by(qname) %>%
       arrange(pos.start, pos.end) %>% 
-      mutate(domain.combination = paste(unique(domain), collapse = " | ", sep = ""),
+      mutate(#domain.combination = paste(unique(domain), collapse = " | ", sep = ""),
              domain.combination2 = paste(unique(domain[domain != "undetected" & domain != "multiple domains"]), collapse = " | ", sep = "")) %>%
       ungroup() %>%
       arrange(qname) 
@@ -654,8 +654,9 @@ Plot.Domain.Combinations = function(tile.data.object, text.size.axis = 9, text.s
       # select only one qname per domain combination
       group_by(domain.combination2) %>%
       arrange(pos.start) %>%
-      mutate(qname1 = qname[1],
-             num.reprseq.this.domain.combination = n_distinct(qname)) %>%
+      mutate(qname1 = qname[1]
+             #num.reprseq.this.domain.combination = n_distinct(qname)
+             ) %>%
       ungroup() %>%
       left_join(num.represeq.per.combination) %>%
       filter(qname == qname1) %>%
