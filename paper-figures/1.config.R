@@ -72,7 +72,7 @@ ALL.CDS.PATH = sprintf("%scoding-seqs/cds-aa.fa", DATA.PATH)
 #FAMILIES.FILEPATH = sprintf("%srafals-figures/data/families/family-table.txt",PROJECT.PATH): Rafal's version
 # This is currently Rafal's version, will be updated by Krzysiek within pipeline
 #FAMILIES.FILEPATH = sprintf("%sother/family-table.txt",DATA.PATH)
-FAMILIES.RAW.FILEPATH = sprintf("%spython_pipeline/output/prot-families/families/dataset-full/mcl/repr-hits-pairwise-prob95-cov80-mcl.out", DATA.PATH)
+FAMILIES.RAW.FILEPATH = sprintf("%spython_pipeline/output/prot-families/families/dataset-full/mcl/repr-hits-pairwise-prob95-cov80-mcl-I20.out", DATA.PATH)
 
 
 #PROFILE.SIMILARITY.TABLE = sprintf("%sprot-families/families/dataset-full/repr-hits-pairwise-prob50.csv", DATA.PATH): Krzysiek pipeline
@@ -107,8 +107,8 @@ MAX.TEMPERATE.BACPHLIP.SCORE = 0.1
 METADATA_PATH = sprintf("%smetadata/refseq_metadata_updated_v3.csv", DATA.PATH)
 
 # where to output tables and figures
-OUTPUT.DATA.PATH = sprintf("%spaper-figures/2023-09-16/tables/", PROJECT.PATH)
-OUTPUT.FIGURES.PATH = sprintf("%spaper-figures/2023-09-16/", PROJECT.PATH)
+OUTPUT.DATA.PATH = sprintf("%spaper-figures/2023-09-19/tables/", PROJECT.PATH)
+OUTPUT.FIGURES.PATH = sprintf("%spaper-figures/2023-09-19/", PROJECT.PATH)
 dir.create(OUTPUT.FIGURES.PATH, recursive = TRUE)
 dir.create(OUTPUT.DATA.PATH, recursive = TRUE)
 
