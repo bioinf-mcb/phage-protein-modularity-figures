@@ -149,7 +149,30 @@ seq.lengths = data.table::fread(REPR.SEQ.LENGTH.FILENAME)
 protein.similarity.data.raw = read.csv(PROFILE.SIMILARITY.TABLE,header = TRUE) %>%
   #rename(qname = query, sname = subject)
   rename(scov.min = scov_min, qcov.min = qcov_min, scov.max = scov_max, qcov.max = qcov_max, max.cov = max_cov, min.cov = min_cov) 
-protein.similarity.data = protein.similarity.data.raw %>%
+
+# Now modify it so that always qname <= sname
+protein.similarity.data.raw.qnames.not.larger.than.sname = protein.similarity.data.raw %>%
+  filter(qname <= sname)
+protein.similarity.data.raw.qnames.larger.than.sname = protein.similarity.data.raw %>%
+  filter(qname > sname)
+protein.similarity.data.raw.qnames.larger.than.sname.reverted = protein.similarity.data.raw.qnames.larger.than.sname %>%
+  rename(qname.new = sname, 
+         sname.new = qname, 
+         scov.min.new = qcov.min, 
+         scov.max.new = qcov.max,
+         qcov.min.new = scov.min, 
+         qcov.max.new = scov.max) %>%
+  rename(qname = qname.new, 
+         sname = sname.new, 
+         scov.min = scov.min.new, 
+         scov.max = scov.max.new,
+         qcov.min = qcov.min.new, 
+         qcov.max = qcov.max.new)
+protein.similarity.data.raw.ordered = rbind(protein.similarity.data.raw.qnames.not.larger.than.sname, 
+                                            protein.similarity.data.raw.qnames.larger.than.sname.reverted)
+
+
+protein.similarity.data = protein.similarity.data.raw.ordered %>%
   select(qname, sname, prob, pident, scov.min, qcov.min, scov.max, qcov.max, max.cov, min.cov) %>%
   left_join(seq.lengths %>% select(qname = name, qlength = length)) %>%
   left_join(seq.lengths %>% select(sname = name, slength = length))  %>%

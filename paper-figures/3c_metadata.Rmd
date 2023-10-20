@@ -276,10 +276,12 @@ all.proteins.in.genomes.dat.by.Family= all.proteins.in.genomes %>%
 
 kwresult = kruskal.test(prop.mosaic.genes.in.genome ~ Family, data = all.proteins.in.genomes.dat.by.Family)
 sample.size = all.proteins.in.genomes.dat.by.Family %>% 
+  filter(!is.na(Family)) %>%
   ungroup() %>% 
   #filter(big.fam) %>% d
   distinct(Accession) %>% nrow()
 num.groups = all.proteins.in.genomes.dat.by.Family %>% 
+    filter(!is.na(Family)) %>%
   ungroup() %>%
   #filter(big.fam) %>% d
   distinct(Family) %>% nrow()
