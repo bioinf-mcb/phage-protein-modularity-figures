@@ -913,29 +913,41 @@ Plot.Domains.Within.Mosaic.Proteins = function(domains.within.proteins.domain.mo
 
 
 Get_Domain_Odss_In_Fold_Types = function(all.fold.types, ecod_id_to_names_map) {
-  all.fold.types.stats = all.fold.types %>%
+  
+  mosaic.and.non.mosaic.fold.types = all.fold.types %>%
     group_by(fold.type.mosaic) %>%
-    mutate(num.this.mosaic.fold.type = n_distinct(fold.type)) %>%
+    summarise(num.this.mosaic.fold.type = n_distinct(fold.type)) %>%
+    ungroup()
+    
+  all.fold.types.stats = all.fold.types %>%
     group_by(t_id) %>%
     mutate(num.fold.types.with.this.t = n_distinct(fold.type)) %>%
     filter(num.fold.types.with.this.t >= 1) %>%
-    group_by(t_id, fold.type.mosaic, num.this.mosaic.fold.type) %>%
+    group_by(t_id, fold.type.mosaic) %>%
     summarise(num.fold.types.with.this.t = n_distinct(fold.type)) %>%
     ungroup() %>%
     tidyr::complete(t_id, fold.type.mosaic, 
-                    fill = list(num.fold.types.with.this.t = 0, num.this.mosaic.fold.type = 0)) %>%
+                    fill = list(num.fold.types.with.this.t = 0)) %>%
+    left_join(mosaic.and.non.mosaic.fold.types) %>%
     mutate(num.fold.types.with.other.t  = num.this.mosaic.fold.type - num.fold.types.with.this.t) %>% 
     ungroup()
   
   all.t.in.fold.types = all.fold.types.stats %>% distinct(t_id)
   all.t.in.fold.types$pval = NA
   all.t.in.fold.types$odds.ratio = NA
+  #all.t.in.fold.types$odds.ratio.conf.up = NA
+  #all.t.in.fold.types$odds.ratio.conf.lb = NA
+  
   for (this.t.id in unique(all.fold.types.stats$t_id)) {
     this.t.stats = all.fold.types.stats %>% filter(t_id == this.t.id)
     M1 = this.t.stats %>% distinct(fold.type.mosaic, num.fold.types.with.this.t, num.fold.types.with.other.t) %>% as.data.table()
-    #domains.within.proteins$pval[which(domains.within.proteins$t_id == this.t.id)] = chisq.test(M1)$p.value
+    #sample.size = sum(M1[,2:3])
+    #print(sample.size)
     all.t.in.fold.types$pval[which(all.t.in.fold.types$t_id == this.t.id)] = fisher.test(M1, alternative = "less")$p.value
     all.t.in.fold.types$odds.ratio[which(all.t.in.fold.types$t_id == this.t.id)] = (M1$num.fold.types.with.this.t[2]/M1$num.fold.types.with.other.t[2])/(M1$num.fold.types.with.this.t[1]/M1$num.fold.types.with.other.t[1])
+    #all.t.in.fold.types$odds.ratio.conf.lb[which(all.t.in.fold.types$t_id == this.t.id)] = fisher.test(M1, alternative = "less")$conf.int[1] %>% as.numeric()
+    #all.t.in.fold.types$odds.ratio.conf.up[which(all.t.in.fold.types$t_id == this.t.id)] = fisher.test(M1, alternative = "less")$conf.int[2] %>% as.numeric()
+    
   }
   
   all.t.in.fold.types$h.index <- sapply(1:nrow(all.t.in.fold.types), function(index){
@@ -1077,3 +1089,10 @@ unique.unclassified.rm = function(x, unknown_words = c("unclassified", "unknown"
     }
 }
     
+
+CheckSymmetry = function(data, colname1, colname2) {
+  a1 = data %>% select(colname1, colname2) %>% rename('q'=colname1, 's'=colname2) %>% distinct()
+  a2 = data %>% select(colname1, colname2) %>% rename('s'=colname1, 'q'=colname2) %>% distinct()
+  a3 = rbind(a1,a2) %>% distinct()
+  return(nrow(a1) == nrow(a3))
+}

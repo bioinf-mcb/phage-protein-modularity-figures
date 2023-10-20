@@ -11,6 +11,7 @@ library(cowplot)
 library(RColorBrewer)
 library(gridExtra)
 library(ggh4x)
+
 ecod_id_to_names_map = data.table::fread(sprintf("%secod_id_to_names_map.txt",OUTPUT.DATA.PATH)) %>% as.data.frame()
 annotation.indices = data.table::fread(file = sprintf("%sannotation.indices",OUTPUT.DATA.PATH))
 included.category.sizes = data.table::fread(file = sprintf("%sincluded.category.sizes",OUTPUT.DATA.PATH))
@@ -61,13 +62,22 @@ point.size = 3
 line.size = 1
 text.size = 12
 annotation.uncertainty.data.vs.cov = data.table::fread(sprintf("%sFigure_Supplementary/tradeoff/Tradeoff_cov.txt", OUTPUT.FIGURES.PATH)) %>% as.data.frame()
-p.a=ggplot(data = annotation.uncertainty.data.vs.cov %>%
-          mutate(`probability\nthreshold [%]` = as.factor(minimum.probability),
-                  annotation.coverage = 100*annotation.coverage)) +
-  geom_point(aes(x = annotation.coverage, y = perc.unique.annotation, linetype = `probability\nthreshold [%]`), col = col1.uniqueness, size = point.size) + 
-  geom_line(aes(x = annotation.coverage, y = perc.unique.annotation, linetype = `probability\nthreshold [%]`), col = col1.uniqueness, size = line.size) + 
-  geom_point(aes(x = annotation.coverage, y = perc.annotated, linetype = `probability\nthreshold [%]`), col = col2.coverage, size = point.size) + 
-  geom_line(aes(x = annotation.coverage, y = perc.annotated, linetype = `probability\nthreshold [%]`), col = col2.coverage, size = line.size) + 
+annotation.uncertainty.data.vs.prob = data.table::fread(sprintf("%sFigure_Supplementary/tradeoff/Tradeoff_prob.txt", OUTPUT.FIGURES.PATH)) %>%
+             filter(annotation.coverage %in% c(0.1, 0.8))
+
+plot.data = rbind(annotation.uncertainty.data.vs.cov %>% mutate(Figure = "Fig_S2_A"),
+                  annotation.uncertainty.data.vs.prob %>% mutate(Figure = "Fig_S2_B"))  %>%        
+  mutate(annotation.coverage = annotation.coverage*100) %>%
+  rename(probability_threshold = minimum.probability,
+         sequence_coverage_threshold = annotation.coverage)
+
+p.a=ggplot(data = plot.data %>%
+             filter(Figure == "Fig_S2_A") %>%
+             mutate(`probability\nthreshold [%]` = as.factor(probability_threshold))) +
+  geom_point(aes(x = sequence_coverage_threshold, y = perc.unique.annotation, linetype = `probability\nthreshold [%]`), col = col1.uniqueness, size = point.size) + 
+  geom_line(aes(x = sequence_coverage_threshold, y = perc.unique.annotation, linetype = `probability\nthreshold [%]`), col = col1.uniqueness, size = line.size) + 
+  geom_point(aes(x = sequence_coverage_threshold, y = perc.annotated, linetype = `probability\nthreshold [%]`), col = col2.coverage, size = point.size) + 
+  geom_line(aes(x = sequence_coverage_threshold, y = perc.annotated, linetype = `probability\nthreshold [%]`), col = col2.coverage, size = line.size) + 
   Get.Theme(legend.position = "right") +
   xlab("sequence coverage threshold [%]") +
   theme( axis.title.y.right = element_text(colour = col2.coverage, size = text.size),
@@ -82,14 +92,14 @@ p.a=ggplot(data = annotation.uncertainty.data.vs.cov %>%
   labs(title = "Impact of sequence coverage on functional annotation")
 
 
-annotation.uncertainty.data.vs.prob = data.table::fread(sprintf("%sFigure_Supplementary/tradeoff/Tradeoff_prob.txt", OUTPUT.FIGURES.PATH))
-p.b=ggplot(data = annotation.uncertainty.data.vs.prob %>%
-             filter(annotation.coverage %in% c(0.1, 0.8)) %>%
-          mutate(`sequence coverage\nthreshold [%]`  = as.factor(annotation.coverage*100))) +
-  geom_point(aes(x = minimum.probability, y = perc.unique.annotation, linetype = `sequence coverage\nthreshold [%]` ), col = col1.uniqueness, size = point.size) + 
-  geom_line(aes(x = minimum.probability, y = perc.unique.annotation, linetype = `sequence coverage\nthreshold [%]` ), col = col1.uniqueness, size = line.size) + 
-  geom_point(aes(x = minimum.probability, y = perc.annotated, linetype = `sequence coverage\nthreshold [%]` ), col = col2.coverage, size = point.size) + 
-  geom_line(aes(x = minimum.probability, y = perc.annotated, linetype = `sequence coverage\nthreshold [%]` ), col = col2.coverage, size = line.size) + 
+
+p.b=ggplot(data = plot.data %>%
+          filter(Figure == "Fig_S2_B") %>%
+          mutate(`sequence coverage\nthreshold [%]`  = as.factor(sequence_coverage_threshold))) +
+  geom_point(aes(x = probability_threshold, y = perc.unique.annotation, linetype = `sequence coverage\nthreshold [%]` ), col = col1.uniqueness, size = point.size) + 
+  geom_line(aes(x = probability_threshold, y = perc.unique.annotation, linetype = `sequence coverage\nthreshold [%]` ), col = col1.uniqueness, size = line.size) + 
+  geom_point(aes(x = probability_threshold, y = perc.annotated, linetype = `sequence coverage\nthreshold [%]` ), col = col2.coverage, size = point.size) + 
+  geom_line(aes(x = probability_threshold, y = perc.annotated, linetype = `sequence coverage\nthreshold [%]` ), col = col2.coverage, size = line.size) + 
   Get.Theme(legend.position = "right") +
   xlab("probability [%]") +
   theme( axis.title.y.right = element_text(colour = col2.coverage, size = text.size),
@@ -104,7 +114,8 @@ p.b=ggplot(data = annotation.uncertainty.data.vs.prob %>%
   labs(title = "Impact of hit probability on functional annotation")
 
 p.figure <- plot_grid(p.a, p.b, labels = c("A", "B"), label_size = 25, ncol = 1)
-ggsave(p.figure, filename = sprintf("%sFigure_Supplementary/tradeoff/FigureS1.png", OUTPUT.FIGURES.PATH), bg = "white", width = 12, height = 10)
+ggsave(p.figure, filename = sprintf("%sFigure_Supplementary/tradeoff/FigureS2.png", OUTPUT.FIGURES.PATH), bg = "white", width = 12, height = 10)
+fwrite(plot.data, file = sprintf("%sSource_Data/FigureS2.txt", OUTPUT.FIGURES.PATH), sep = "\t")
 ```
 
 
@@ -142,6 +153,17 @@ for (selected_category in unique(domain.network.metadata$category)) {
   ggsave(annotated.domain.network.figure, filename = sprintf("%sFigure_Supplementary/domain_network/annotated.domain.network.figure_%s.png", OUTPUT.FIGURES.PATH, selected_category), bg = "white", width = 8, height = 8)
 }
 
+fwrite(domain.network.selected.categories %>% 
+         filter(category == "DNA, RNA and nucleotide metabolism"), 
+       file = sprintf("%sSource_Data/FigureS7.txt", OUTPUT.FIGURES.PATH), sep = "\t")
+
+fwrite(domain.network.selected.categories %>% 
+         filter(category == "tail"), 
+       file = sprintf("%sSource_Data/FigureS8.txt", OUTPUT.FIGURES.PATH), sep = "\t")
+
+fwrite(domain.network.selected.categories %>% 
+         filter(category == "lysis"), 
+       file = sprintf("%sSource_Data/FigureS9.txt", OUTPUT.FIGURES.PATH), sep = "\t")
 
 ```
 
@@ -195,6 +217,10 @@ network.default.figure
 p.figure <- plot_grid(network.default.figure, network.relaxed.figure, labels = c("A", "B"), label_size = 25, ncol = 1, rel_heights = c(0.27, 0.73))
 ggsave(p.figure, filename = sprintf("%sFigure_Supplementary/annot_networks/annot_networkss.pdf", OUTPUT.FIGURES.PATH), width =8, height = 12)
 
+fwrite(rbind(
+  annotation.netwok.default.threshold %>% mutate(Figure = "Fig_S3_A"), 
+  annotation.netwok.relaxed.threshold %>% mutate(Figure = "Fig_S3_B")),
+       file = sprintf("%sSource_Data/FigureS3.txt", OUTPUT.FIGURES.PATH), sep = "\t")
 ```
 
 
@@ -240,6 +266,11 @@ VisualiseIgraphnetwork(data.for.network = mosaic.network %>%
                     node.label.color = "black",
                     add.legend = FALSE)
 dev.off()
+
+fwrite(mosaic.network,
+       file = sprintf("%sSource_Data/Figure2B_network.txt", OUTPUT.FIGURES.PATH), sep = "\t")
+fwrite(included.categories.metadata,
+       file = sprintf("%sSource_Data/Figure2B_nodes_attributes.txt", OUTPUT.FIGURES.PATH), sep = "\t")
 
 ```
 
@@ -297,6 +328,11 @@ dev.off()
 tiff(sprintf("%sFigure1/Figure1_H_domains.tiff", OUTPUT.FIGURES.PATH), width = 11, height = 12)
 grid::grid.draw(g)
 dev.off()
+
+fwrite(h.domain.occurence.data,
+       file = sprintf("%sSource_Data/Figure1.txt", OUTPUT.FIGURES.PATH), sep = "\t")
+
+
 ```
 
 ```{r}
@@ -342,6 +378,10 @@ cor.fig = ggplot(num.f.within.h, aes(x = num_prot, y = num_f)) +
 fig_diversity_ecod_f = plot_grid(num.f.fig, cor.fig, labels = c("A", "B"), label_size = 25, ncol = 1, rel_heights =  c(0.6, 0.4))#ncol = 2,rel_widths = c(0.6, 0.4))
 ggsave(sprintf("%sFigure_Supplementary/domain-div-freq-h/domain-div-freq-h.jpg", OUTPUT.FIGURES.PATH),width = 9, height = 12) #)width = 15, height = 7)
 
+fwrite(num.f.within.h,
+       file = sprintf("%sSource_Data/FigureS5.txt", OUTPUT.FIGURES.PATH), sep = "\t")
+
+
 ```
 
 ```{r}
@@ -361,6 +401,9 @@ ggplot(t.domain.occurence.data.full) +
   guides(fill = "none") +
   scale_fill_manual(values = PHROG.COLOR.MAP)
 ggsave(sprintf("%sFigure_Supplementary/T_domains/T_domains.jpg", OUTPUT.FIGURES.PATH), width = 20, height = 20)
+
+fwrite(t.domain.occurence.data.full,
+       file = sprintf("%sSource_Data/FigureS4.txt", OUTPUT.FIGURES.PATH), sep = "\t")
 
 
 ```
@@ -384,6 +427,9 @@ pdf(sprintf("%sFigure3/domain.positions_most_mosaic.pdf", OUTPUT.FIGURES.PATH),
            height = 20)
 do.call("grid.arrange", c(domain.position.plots, ncol=1))
 dev.off()
+fwrite(all.tiles.data,
+       file = sprintf("%sSource_Data/Figure3.txt", OUTPUT.FIGURES.PATH), sep = "\t")
+
 ```
 
 
@@ -395,6 +441,9 @@ dev.off()
 diversity.ok.ecod = diversity %>% 
   #filter(!poorly.ecod.annotated)  %>%
   mutate(label = if_else(diverse.for.label,annotation , ""))
+
+cor.test(diversity.ok.ecod$num.families, diversity.ok.ecod$num.topology.combinations,
+         method = "spearman", alternative = "two.sided")
 
 
 Fig4b = ggplot(diversity.ok.ecod, aes(x = num.families, y = num.topology.combinations)) + 
@@ -411,6 +460,11 @@ Fig4b = ggplot(diversity.ok.ecod, aes(x = num.families, y = num.topology.combina
 dir.create(sprintf("%sFigure_Supplementary/diversity_scatterplot/", OUTPUT.FIGURES.PATH))
 ggsave(sprintf("%sFigure_Supplementary/diversity_scatterplot/diversity_scatterplot.pdf", OUTPUT.FIGURES.PATH), Fig4b, width = 10, height = 6)
 ggsave(sprintf("%sFigure_Supplementary/diversity_scatterplot/diversity_scatterplot.png", OUTPUT.FIGURES.PATH), Fig4b,bg = "white", width = 10, height = 6)
+
+fwrite(diversity.ok.ecod,
+       file = sprintf("%sSource_Data/FigureS11.txt", OUTPUT.FIGURES.PATH), sep = "\t")
+
+
 ## supplementary version
 ```
 
@@ -471,17 +525,75 @@ ggsave(sprintf("%sFigure_Supplementary/ecod-coverage/ecod-coverage.png", OUTPUT.
 
 ```
 
+```{r}
+# Data THAT REQUIRES DOTS
+num.h.per.q = data.table::fread(sprintf("%sFigure_Supplementary/ecod-coverage/num.h.per.q.txt", OUTPUT.FIGURES.PATH)) %>%
+  select(annotation.index, value = num.h) %>% mutate(proportion = "max.num.h")
+prot.length.per.qname = data.table::fread(
+  sprintf("%sFigure_Supplementary/ecod-coverage/prot.length.per.qname.txt", OUTPUT.FIGURES.PATH)) %>%
+  select(annotation.index, value = length) %>% mutate(proportion = "mean.length")
+ecods.across.fold.types = data.table::fread(
+  sprintf("%sFigure_Supplementary/ecod-coverage/ecods.across.fold.types.txt", OUTPUT.FIGURES.PATH)) %>%
+  select(annotation.index, value = num.t) %>% mutate(proportion = "mean.num.t")
 
+point.data = num.h.per.q %>% rbind(prot.length.per.qname) %>% rbind(ecods.across.fold.types) %>%
+  left_join(annotation.indices) %>%
+    inner_join(diversity.top %>% distinct(annotation, category)) %>%
+  distinct(annotation, category, value, proportion) 
+
+  levels = c("mean.length",
+             "max.num.h",
+            "mean.num.t", 
+             "prop.proteins.with.ecod.hit",
+             "prop.with.multi.x.domains")
+  diversity.top$proportion = factor(diversity.top$proportion, levels = levels)
+  point.data$proportion = factor(point.data$proportion, levels = levels)
+
+    p <- ggplot(mapping = aes(y = annotation, x = value, fill = category)) +
+    geom_bar(data = diversity.top, stat = "identity", position=position_dodge()) +
+    geom_point(data = point.data, size = 0.1) +
+    scale_fill_manual(values = PHROG.COLOR.MAP) + theme_minimal() + 
+    theme(strip.text.y = element_text(face = "bold", size = 7, angle = 360)) + 
+    labs(x = "", y = "") +
+    guides(fill = "none")  +
+    facet_grid(category ~ proportion, scales = "free", space = "free_y", 
+                labeller = labeller(category = phrog.class.labels, proportion = diversity.labeller)) 
+
+ggsave(sprintf("%sFigure_Supplementary/ecod-coverage/ecod-coverage2.pdf", OUTPUT.FIGURES.PATH), 
+      p, width = 15, height = 11)
+ggsave(sprintf("%sFigure_Supplementary/ecod-coverage/ecod-coverage2.png", OUTPUT.FIGURES.PATH), 
+     p, bg = "white", width = 15, height = 11)
+
+  
+  p <- ggplot(mapping = aes(y = annotation, x = value, fill = category)) +
+    geom_bar(data = diversity.top, stat = "identity", position=position_dodge()) +
+    geom_jitter(data = point.data, size = 0.02, width = 0, alpha = 0.5) +
+    scale_fill_manual(values = PHROG.COLOR.MAP) + theme_minimal() + 
+    theme(strip.text.y = element_text(face = "bold", size = 7, angle = 360)) + 
+    labs(x = "", y = "") +
+    guides(fill = "none")  +
+    facet_grid(category ~ proportion, scales = "free", space = "free_y", 
+                labeller = labeller(category = phrog.class.labels, proportion = diversity.labeller)) 
+
+ggsave(sprintf("%sFigure_Supplementary/ecod-coverage/ecod-coverage3.pdf", OUTPUT.FIGURES.PATH), 
+      p, width = 15, height = 11)
+ggsave(sprintf("%sFigure_Supplementary/ecod-coverage/ecod-coverage3.png", OUTPUT.FIGURES.PATH), 
+     p, bg = "white", width = 15, height = 11)
+
+
+
+fwrite(point.data,
+       file = sprintf("%sSource_Data/FigureS10.txt", OUTPUT.FIGURES.PATH), sep = "\t")
+
+```
 
 # Mosaicism by sequence vs ecod
 ```{r}
 # mosaic family in a given annotatioh i.e. at least one protein in this family having this annotation is mosaic
-mosaicism.underestimated.data  = data.table::fread(sprintf("%sFigure4/mosaic.domain.classes.txt", OUTPUT.FIGURES.PATH)) %>%
+mosaicism.underestimated.data.raw  = data.table::fread(sprintf("%sFigure4/mosaic.domain.classes.txt", OUTPUT.FIGURES.PATH)) %>%
    select(annotation.index, annotation, category, num.families, num.families.mosaic.domain, num.families.mosaic.seq.or.domain, pval.seq.or.domain.corr, pval.domain.corr)  %>%
   inner_join(included.category.sizes %>% select(annotation.index)) %>%
-  inner_join(top.diversity.classes)
-
-mosaicism.underestimated.data = mosaicism.underestimated.data %>%
+  inner_join(top.diversity.classes) %>%
   select(annotation.index, annotation, category, 
          num.families,
          num.families.mosaic.domain,
@@ -489,7 +601,9 @@ mosaicism.underestimated.data = mosaicism.underestimated.data %>%
          pval.seq.or.domain.corr,
          pval.domain.corr,
          num.families.mosaic.domain) %>%
-  filter(!(annotation.index %in% unspecific.annotation.indices)) %>%
+  filter(!(annotation.index %in% unspecific.annotation.indices))
+
+mosaicism.underestimated.data = mosaicism.underestimated.data.raw %>%
   rename(`All` = num.families,
          `Mosaic by ECOD` =  num.families.mosaic.domain,#num.prot.mosaic.domain.within.and.to.other.specific.class, 
          `Mosaic by ECOD or seq` =   num.families.mosaic.seq.or.domain) %>%
@@ -527,14 +641,15 @@ ggsave(sprintf("%sFigure4/Ecod_vs_signal_mosaicism_families.new.pdf", OUTPUT.FIG
 ggsave(sprintf("%sFigure4/Ecod_vs_signal_mosaicism_families.new.png", OUTPUT.FIGURES.PATH), g, bg = "white",
        width = 13, height = 7)
 
+
+
+fwrite(mosaicism.underestimated.data.raw,
+       file = sprintf("%sSource_Data/Figure4.txt", OUTPUT.FIGURES.PATH), sep = "\t")
 ```
 
 
 
 
-
-
-# Fig 3c shared ecods in knwonn and unknown prots
 
 ```{r}
 t.domain.occurence.data = data.table::fread(sprintf("%sFigure2/t.domain.occurence.data.txt", OUTPUT.FIGURES.PATH)) %>%
@@ -557,6 +672,12 @@ all.t.in.fold.types_pident50 = data.table::fread(file = sprintf("%sFigure2/all.t
 p.odds = Plot.Domains.Within.Mosaic.Proteins(all.t.in.fold.types_pident50, colors = domain_fill_colors, significance_level_alpha = significance_level_alpha) + theme(text = element_text(size = 20))
 #ggsave(filename = sprintf("%sAdditional_Figures/folds_within_mosaic_fold_types_pident50.jpg", OUTPUT.FIGURES.PATH) ,p.odds , width = 15, height = 12)
 ggsave(filename = sprintf("%sFigure2/folds_within_mosaic_fold_types_pident50.pdf", OUTPUT.FIGURES.PATH) ,p.odds , width = 10, height = 9)
+
+
+fwrite(rbind(
+  all.t.in.fold.types %>% mutate(Figure = "Figure_2_C"),
+  all.t.in.fold.types_pident50 %>% mutate(Figure = "Figure_2_D")),
+       file = sprintf("%sSource_Data/Figure2_CD.txt", OUTPUT.FIGURES.PATH), sep = "\t")
 ```
 
 
@@ -576,7 +697,8 @@ qname.pairs.sharing.t.and.disshare.x.symmetric = rbind(
 cov.vs.pident = data.table::fread(sprintf("%sFigure_Supplementary/pident-maxcov/cov.vs.pident.txt", OUTPUT.FIGURES.PATH))
 
 cov.vs.pident.plot = ggplot() + 
-  stat_binhex(data = cov.vs.pident, bins = 50, aes(x=pident, y=max.cov)) + 
+  stat_binhex(data = cov.vs.pident, #%>% select(qname,sname,pident,max.cov), 
+              bins = 50, aes(x=pident, y=max.cov)) + 
 #  geom_rect(aes(xmin = MINIMUM.PIDENT.FOR.PAIRWISE.HIT/100, xmax = 1, 
 #            ymin = 0, ymax = MINIMUM.COV.FOR.PROTEIN.SIMILARITY, 
 #            color = "red"), fill = NA, size = 2) + guides(color = "none") +
@@ -636,6 +758,14 @@ cov.vs.pident.figure <- plot_grid(cov.vs.pident.plot, not.domain.mosaic.pair.cov
 
 ggsave(sprintf("%sFigure_Supplementary/pident-maxcov/pident-maxcov.png", OUTPUT.FIGURES.PATH), cov.vs.pident.figure, bg = "white",  width = 5, height = 12)
 
+
+
+
+fwrite(rbind(
+  cov.vs.pident %>% select(qname,sname,pident,max.cov) %>% mutate(Figure = "Fig_S12_A"),
+  not.domain.mosaic.pair.cov.vs.pident.data %>% select(qname,sname,pident,max.cov) %>% mutate(Figure = "Fig_S12_B"),
+  not.domain.mosaic.pair.cov.vs.pident.data  %>% select(qname,sname,pident,max.cov) %>% mutate(Figure = "Fig_S12_C")),
+       file = sprintf("%sSource_Data/FigureS12.txt", OUTPUT.FIGURES.PATH), sep = "\t")
 ```
 
 ```{r}
@@ -684,6 +814,12 @@ VisualiseIgraphnetwork(data.for.network = recent_HGT_pairs_90 %>% mutate(weight 
                       include.labels = TRUE,
                       alpha = 0.3)
 dev.off()
+
+
+fwrite(rbind(
+ recent_HGT_pairs_70 %>% mutate(Figure = "Fig_S13_A"),
+ recent_HGT_pairs_90 %>% mutate(Figure = "Fig_S13_B")),
+       file = sprintf("%sSource_Data/FigureS13.txt", OUTPUT.FIGURES.PATH), sep = "\t")
 ```
 
 # Supplementary Table

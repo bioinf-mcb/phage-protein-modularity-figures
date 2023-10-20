@@ -209,11 +209,18 @@ g
 ggsave(g, filename = sprintf("%sprop_mosaic_genes_per_genome_and_lifestyle.png", OUTPUT.FIGURES.METADATA.PATH), bg = "white", width = 6, height = 4)  
 
 
-
-wilcox.test(x = all.proteins.in.genomes.dat %>% filter(lifestyle %in% c("virulent")) %>% pull(prop.mosaic.genes.in.genome),
-            y = all.proteins.in.genomes.dat %>% filter(lifestyle %in% c("temperate")) %>% pull(prop.mosaic.genes.in.genome),
+x = all.proteins.in.genomes.dat %>% filter(lifestyle %in% c("virulent")) %>% pull(prop.mosaic.genes.in.genome)
+y = all.proteins.in.genomes.dat %>% filter(lifestyle %in% c("temperate")) %>% pull(prop.mosaic.genes.in.genome)
+wilcox.test(x = x,
+            y = y,
             alternative = "less"
             )$p.value
+length(x)
+length(y)
+
+
+fwrite(all.proteins.in.genomes.dat %>% filter(lifestyle %in% c("temperate", "virulent")),
+       file = sprintf("%sSource_Data/FigureS14.txt", OUTPUT.FIGURES.PATH), sep = "\t")
 ```
 
 # Here we compare num mosaic reprseqs that are only in virulent vs only in temperate phages
@@ -268,10 +275,20 @@ all.proteins.in.genomes.dat.by.Family= all.proteins.in.genomes %>%
 
 
 kwresult = kruskal.test(prop.mosaic.genes.in.genome ~ Family, data = all.proteins.in.genomes.dat.by.Family)
+sample.size = all.proteins.in.genomes.dat.by.Family %>% 
+  ungroup() %>% 
+  #filter(big.fam) %>% d
+  distinct(Accession) %>% nrow()
+num.groups = all.proteins.in.genomes.dat.by.Family %>% 
+  ungroup() %>%
+  #filter(big.fam) %>% d
+  distinct(Family) %>% nrow()
 
-
+# was 926.51 and now  931.51: CHECK
 
 all.proteins.in.genomes.dat.by.Family$Family = factor(all.proteins.in.genomes.dat.by.Family$Family, levels = unique(all.proteins.in.genomes.dat.by.Family$Family))
+
+
 g=ggplot(all.proteins.in.genomes.dat.by.Family %>% filter(big.fam),
          aes(x=Family, y = prop.mosaic.genes.in.genome)) + 
   geom_jitter(aes(col = Family), size = 0.5, alpha = 0.3, height = 0) +
@@ -290,7 +307,8 @@ g=ggplot(all.proteins.in.genomes.dat.by.Family %>% filter(big.fam),
   xlab("")
 g
 ggsave(g, filename = sprintf("%sprop_mosaic_genes_per_genome_and_TaxFam.png", OUTPUT.FIGURES.METADATA.PATH), bg = "white", width = 8, height = 6)  
-
+fwrite(all.proteins.in.genomes.dat.by.Family %>% filter(big.fam),
+       file = sprintf("%sSource_Data/FigureS15.txt", OUTPUT.FIGURES.PATH), sep = "\t")
 
 ```
 
@@ -320,8 +338,17 @@ medians = all.proteins.in.genomes.dat.by.host %>%
 
 
 kwresult = kruskal.test(prop.mosaic.genes.in.genome ~ Host, data = all.proteins.in.genomes.dat.by.host)
-
-
+sample.size = all.proteins.in.genomes.dat.by.host %>% 
+  filter(!is.na(Host)) %>%
+    ungroup() %>%
+  distinct(Accession) %>% 
+  nrow()
+kwresult$p.value
+num.groups = all.proteins.in.genomes.dat.by.host %>% 
+  filter(!is.na(Host)) %>%
+  ungroup() %>%
+  #filter(big.fam) %>% d
+  distinct(Host) %>% nrow()
 
 all.proteins.in.genomes.dat.by.host$Host = factor(all.proteins.in.genomes.dat.by.host$Host, levels = unique(medians$Host))
 g=ggplot(all.proteins.in.genomes.dat.by.host %>% filter(big),
@@ -342,7 +369,8 @@ g=ggplot(all.proteins.in.genomes.dat.by.host %>% filter(big),
   xlab("")
 g
 ggsave(g, filename = sprintf("%sprop_mosaic_genes_per_genome_and_Host.png", OUTPUT.FIGURES.METADATA.PATH), bg = "white", width = 12, height = 6)  
-
+fwrite(all.proteins.in.genomes.dat.by.host %>% filter(big),
+       file = sprintf("%sSource_Data/FigureS16.txt", OUTPUT.FIGURES.PATH), sep = "\t")
 
 ```
 
@@ -371,11 +399,14 @@ functions.per.family$Family = factor(functions.per.family$Family, levels = funct
   
   
   functions.per.family$Family = factor(functions.per.family$Family, levels = functions.per.family %>% arrange(desc(num.genomes.per.family)) %>% pull(Family) %>% unique())
-  g=ggplot(functions.per.family  %>% 
+  data.to.plot = functions.per.family  %>% 
              ungroup() %>%
              filter(Genus != "unknown") %>% 
              select(Family, family, annotation, category, prop.genomes.with.this.function, prop.mosaic) %>%
-    tidyr::complete(tidyr::nesting(Family, family), tidyr::nesting(annotation, category), fill  = list(prop.genomes.with.this.function = 0, prop.mosaic = 0)) )+
+              tidyr::complete(tidyr::nesting(Family, family), 
+                    tidyr::nesting(annotation, category), 
+                    fill  = list(prop.genomes.with.this.function = 0, prop.mosaic = 0))
+  g=ggplot(data.to.plot)+
   geom_tile(aes(x = family, y =annotation , alpha = prop.genomes.with.this.function, fill = prop.mosaic)) + #, hjust = 0, vjust = 0
   theme_bw() +
   theme(axis.text.x = element_text(angle = 45, hjust =1,vjust=1, size = 8),
@@ -389,6 +420,9 @@ functions.per.family$Family = factor(functions.per.family$Family, levels = funct
 g  
   ggsave(g, filename = sprintf("%sfunctions_vs_taxonomy_family_an_genus3.png", OUTPUT.FIGURES.METADATA.PATH), bg = "white", width =30, height =15)  
   
+  fwrite(data.to.plot,
+       file = sprintf("%sSource_Data/FigureS17.txt", OUTPUT.FIGURES.PATH), sep = "\t")
+
   
 
 ```
@@ -440,6 +474,10 @@ functions.per.lifestyle = all.proteins.in.genomes %>%
 g  
   ggsave(g, filename = sprintf("%sfunctions_vs_lifestyle_mosaicism.png", OUTPUT.FIGURES.METADATA.PATH), bg = "white", width =10, height =15)  
 
+  
+  fwrite(functions.per.lifestyle,
+       file = sprintf("%sSource_Data/FigureS18.txt", OUTPUT.FIGURES.PATH), sep = "\t")
+  
 ```
 
 
@@ -469,6 +507,8 @@ recentHGT.with.metadata %>% filter(pair.lifestyle == "temperate & virulent" & !i
   left_join(name.table %>% select(qname = repr.name, qncbi.id = ncbi.id)) %>%
   left_join(name.table %>% select(sname = repr.name, sncbi.id = ncbi.id)) %>%
   distinct(qindex, qncbi.id, sncbi.id)
+
+
 
 # we have 1 pair of spike rHMM mosaic between only virulent and only temerate
 
@@ -694,7 +734,8 @@ g=ggplot(recent.reprseq.pairs.meta.all %>% filter(n > 0)) +
                                "different trait" = "lightcoral"))
 g
 ggsave(g, filename = sprintf("%srecent_reprseq_pairs_meta.png", OUTPUT.FIGURES.METADATA.PATH), bg = "white", width = 13, height = 6)  
-
+  fwrite(recent.reprseq.pairs.meta.all %>% filter(n > 0),
+       file = sprintf("%sSource_Data/FigureS20.txt", OUTPUT.FIGURES.PATH), sep = "\t")
 
 
 ```
@@ -874,7 +915,8 @@ g=ggplot(dat.mosaicism.type) +
   
    
   # same for recent mosaicism
-
+  fwrite(dat.mosaicism.type,
+       file = sprintf("%sSource_Data/FigureS19.txt", OUTPUT.FIGURES.PATH), sep = "\t")
 ```
 
 
